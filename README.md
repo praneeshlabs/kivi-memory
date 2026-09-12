@@ -1,123 +1,216 @@
-# Kivi — semantic memory for a voice dictation app
+# Kivi
 
-Kivi listens to what you say, decides what is worth remembering, and answers
-questions from what it kept — with a citation for every claim, or an honest
-"I don't know".
+Kivi is a memory layer for a voice dictation app. You talk to it. It decides
+what is worth remembering, keeps that, and answers questions from what it
+kept. Every answer either points to the memory it came from or says plainly
+that it does not know.
 
-Built on the **Sarvam** stack (Sarvam chat, Saaras ASR, Bulbul TTS) so it works
-in Indian languages and code-mixed speech, not just English, with Groq as a
-fallback. Which one is actually serving is reported, never assumed — see
-[Before any demo](#before-any-demo).
+Built for Indian users, on Sarvam's models, so it can hear Tamil, Hindi and
+the code-mixed English people actually speak. Groq is a fallback so the app
+still runs on days that stack is not available.
 
 ---
 
-## The idea worth reading
+## What it is for
 
-Most "memory" systems detect a contradiction by similarity: if a new fact is
-very close to an old one, treat it as a replacement. **That is backwards.**
+Three real situations, not three feature bullets.
 
-Two facts contradict each other precisely when they fill the *same slot* with
-*different values* — and different values push cosine similarity **down**.
-Measured on real data:
+**You say something once and want it remembered.**
+"My manager is Rahul." "I'm allergic to peanuts." "I always order filter
+coffee when I'm running late." Kivi decides on its own whether this is a
+fact, a one-off event, or a pattern, and stores it that way. You never fill
+in a form.
 
-| Pair | Cosine | What it actually is |
+**You ask something later and want a straight answer.**
+"Who's my manager?" "What did I say about coffee?" Kivi answers from what
+you told it and shows the memory it used. If it does not have the answer, it
+says so instead of guessing.
+
+**Things you told it stop being true.**
+You change jobs, move city, or the vague thing becomes a specific thing.
+Kivi is supposed to notice and update instead of quietly piling up five
+versions of the same fact.
+
+---
+
+## What actually happens when you talk to it
+
+1. You say or type something.
+2. Kivi decides: is this something to remember, a question, or a request to
+   go do something in the world. It cannot do the last one yet, but it says
+   so honestly instead of pretending.
+3. If it's worth remembering, Kivi checks what it already knows. If the new
+   thing replaces an old one, the old one is archived, not deleted. If it's
+   the same thing said differently, nothing new is stored.
+4. If you ask something, Kivi searches what it has, drafts an answer, and
+   only shows that answer if it can point to the memory behind it. If it
+   can't, you get an honest "I don't know" instead of a confident guess.
+
+That last rule is the one thing in this project I would defend hardest: an
+answer is never shown unless a memory backs it. Not "Kivi mostly sticks to
+memory." Never, by construction.
+
+---
+
+## The two decisions worth explaining
+
+### Why a fact changing does not look like a fact changing
+
+The obvious way to catch a contradiction is: if the new thing you said is
+very similar to something you said before, treat it as a correction.
+
+That is wrong, and it took a wrong version shipping before I understood why.
+Two facts contradict each other exactly when they fill the same slot with
+different values. Different values push a similarity score down, not up. I
+measured it on this app's own data.
+
+| Pair | Similarity | What it is |
 |---|---|---|
-| "works at Acme" → "works at Google" | **0.324** | a genuine job change |
-| "works at Google" vs "has a cat named Pixel" | **0.357** | completely unrelated |
+| "works at Acme" to "works at Google" | 0.32 | a real job change |
+| "works at Google" vs "has a cat named Pixel" | 0.36 | two unrelated facts |
 
-The real contradiction scores *lower* than the unrelated pair. The
-distributions overlap, so **no similarity threshold can separate them** — a
-0.95 cutoff catches only verbatim restatements, which are duplicates, not
-contradictions.
+The real contradiction scores lower than two things that have nothing to do
+with each other. There is no cutoff number that separates those two rows,
+because they overlap. So Kivi does not use a number here. It shortlists a
+few memories that are plausibly about the same thing, nearest by meaning
+plus anything sharing a keyword, and asks the model directly: does this
+replace that, refine it, repeat it, or is it just a different fact?
+Superseded memories move to an archive table with a pointer to what replaced
+them. Nothing is deleted.
 
-Kivi therefore shortlists candidates by **rank** (nearest by embedding ∪ top
-BM25 hits, same tag) and asks the model for a **semantic verdict**:
-`supersedes` / `refines` / `duplicate` / `coexists`. Superseded memories are
-archived with a pointer to what replaced them, never deleted.
+### Why an answer with no citation gets thrown away, not shown
 
-## The second idea: citation gating
-
-The anti-hallucination guarantee is *not* "Kivi only knows your memories". It
-is **"Kivi never presents anything as your memory unless a memory backs it"**.
-
-If the model writes an answer but cites no memory, the prose is **discarded**
-and the honest decline is shown instead. Answers from general knowledge or the
-web are labelled as such in the UI. Hallucination cannot surface as memory,
-structurally.
+A model asked to answer from memory will sometimes write something
+reasonable sounding that is not actually grounded in anything it was given.
+The fix is not a stricter prompt. Prompts get ignored under pressure. The
+fix is structural: if the model's answer does not name which memory it
+used, the text is discarded and a plain decline is shown instead. The user
+never sees prose that is not backed by something real, because that prose
+never leaves the server.
 
 ---
 
 ## Architecture
 
 ```
-Voice / text
-    │
-    ├─ fast_paths ──────── "ok", "hi", "thanks" → 0 LLM calls, 0 ms
-    │
-    ├─ router ──────────── intent (statement / question / request)
-    │                      scope  (personal / general / mixed)
-    │                      resolved_query ← pronouns bound to referents
-    │
-    ├─ INGEST  filter → conflict verdict → link → save
-    │          (episode + preference from one sentence)
-    │
-    └─ RECALL  hybrid retrieve → decide → answer → cite
-               memory · general · web   + follow-up questions on a gap
+you speak or type
+      |
+      v
+routing: is this a memory, a question, or a request?
+      |   (also strips "ok", "hi", "thanks" before any model runs)
+      v
+  remembering                          answering
+  filter, conflict check, save         hybrid search, answer, cite
+  (one sentence can produce both       or an honest "I don't know"
+   an event and a habit)
 ```
 
-| Layer | Choice | Why |
-|---|---|---|
-| Chat | Sarvam (`sarvam-105b`), Groq fallback | Indic-native. Sarvam-M was retired and `sarvam-30b` is not on the GA endpoint; the API itself names the live set |
-| ASR | Saaras `v4`, Whisper fallback | handles code-mixed Tamil/Hindi–English |
-| TTS | Bulbul `v3` | answers spoken back in 11 Indian languages |
-| Embeddings | `paraphrase-multilingual-MiniLM-L12-v2` | 384-dim, cross-lingual retrieval |
-| Lexical | SQLite FTS5 (BM25) | names — "Pixel", "Meera", "Zoho" — where embeddings are weakest |
-| Fusion | Reciprocal Rank Fusion (k=60) | no score calibration needed between the two |
-| Store | SQLite, `float16` embeddings | 1.22 KB per memory end-to-end |
+**Storage.** SQLite, one file. `schema.sql` builds it from nothing.
+`migrations/` carries every change since, in order, and both a brand new
+database and an old one end up in the same shape.
+
+**Retrieval.** Two search methods, combined. Meaning based search, an
+embedding model, finds things that are phrased differently but mean the
+same thing. Keyword search, SQLite's built in full text index, finds names
+and proper nouns, which the meaning based search is weak on, because a name
+like "Pixel" does not carry much meaning as a word. The two rankings are
+merged by position, not by score, so neither method needs its numbers
+recalibrated when the other one changes.
+
+**Speech.** Sarvam's Saaras model for speech to text, Bulbul for text to
+speech, in eleven Indian languages plus English, including code mixed
+speech. Whisper, through Groq, is the fallback.
+
+**Language model.** Sarvam's chat models by default, Groq as fallback. One
+file, `app/services/llm_client.py`, holds every model name. Both providers
+have already quietly retired a model name on me mid build. Centralising
+this meant the fix was one line, not a search through every prompt in the
+app.
+
+**Everything else that changes how it feels to use:**
+
+- A small set of Indian English phrases, tone that turns off automatically
+  when you mention something hard, in `app/services/persona.py`.
+- Follow up questions when Kivi does not know something, so it can ask
+  rather than just refuse.
+- A consolidation pass, `POST /api/memories/consolidate`, that finds
+  memories saying the same thing in different words and collapses them,
+  since the filter alone lets a few through.
 
 ---
 
-## Measured results
+## What I checked, and what I did not just assume
 
-Optimisation pass, same machine, same data:
+52 automated tests run against a stubbed model, so they check the app's own
+logic rather than the model's mood that day. Does a superseded fact
+actually get archived. Does an answer with no citation actually get thrown
+away. Does an old database actually pick up new columns without losing
+data. Run them with:
+
+```bash
+python -m pytest tests/ -q
+```
+
+Separately, an evaluation runs against the real model and produces numbers
+that move a little each time, because a real model is not perfectly
+consistent. This is the difference between "the code does what I meant" and
+"the model is actually any good at the job." Both matter and they are not
+the same test. Run it with:
+
+```bash
+python seed.py --reset
+python eval/run_eval.py
+```
+
+### Results
+
+The full breakdown, including every case, is in `eval/results/RESULTS.md`
+and `eval/results/results.json`. This is what the last run against the
+seeded database produced, real model, nothing removed to make the numbers
+look better.
+
+**Memory filter, 18 cases.** Decides correctly whether to keep, watch, or
+drop 89 percent of the time. Never wrongly threw away something worth
+keeping. Three misses, kept in the report rather than removed: a Hindi
+sentence got tagged as a permanent fact instead of a dated event, a hedged
+sentence, "I think I might be coming down with something," got saved
+outright instead of watched first, and a task request got classified as a
+habit instead of an event.
+
+**Retrieval, 17 queries.** Finds the right memory in the top 3 results 79
+percent of the time. Two real misses worth naming: "Where do I work?" did
+not surface the Zoho memory, and the same question in Hindi also missed.
+Both are in the report, not hidden. Declines correctly on all three
+questions that have no answer in memory.
+
+**Speech to text, 8 scored English cases.** 4.6 percent word error rate.
+Three Tamil, Hindi and code mixed cases are in the corpus but marked
+untested, because a machine voice reading Tamil text does not tell you
+anything about how a real person speaking Tamil sounds. Those need an
+actual human recording, which I did not have for this submission.
+
+The numbers in the eval run above were produced while Sarvam was not
+serving requests, see the note in `eval/results/RESULTS.md`. The pipeline
+and the corpus are what is being evaluated here. Rerun after Sarvam credit
+is available to get Sarvam's own numbers on the same corpus.
+
+### Performance
+
+Before the optimisation pass, the app averaged 2.4 seconds per message and
+made 2 to 4 model calls for things like "ok" or "thanks."
 
 | | Before | After |
 |---|---|---|
-| Trivial input ("ok", "hi") | ~1,400 ms, 2 LLM calls | **0 ms, 0 calls** |
-| Question, cold | ~2,400 ms avg | **~840 ms** |
-| Question, repeated | ~2,400 ms | **1 ms** (cached) |
-| Retrieval score on answered queries | 0.363 | **0.54–0.69** |
-| Embedding storage | 1,536 B | **768 B** |
+| "ok", "hi", "thanks" | about 1.4s, 2 model calls | 0ms, 0 calls |
+| A real question, first time | about 2.4s | about 0.8s |
+| The same question again | about 2.4s | about 1ms, cached |
+| Retrieval score on answered questions | 0.36 | 0.54 to 0.69 |
+| Storage per memory | 1536 bytes | 768 bytes |
 
-Scaling, `python bench/scale.py 50000`:
-
-```
-50,000 memories · 60.8 MB db · 1.22 KB per memory
-cold  (loads all vectors) : 1,046 ms
-warm  (cached matrix)     : 113–341 ms
-```
-
-Retrieval is one matmul against an in-process matrix, invalidated on write.
-Past ~100k memories the honest next step is an ANN index (hnswlib/FAISS);
-below that it is not worth the dependency.
-
----
-
-## Tests
-
-```bash
-python -m pytest tests/ -q      # 47 passing
-```
-
-The LLM is stubbed, so the tests pin **pipeline behaviour** rather than model
-output. Every case is a bug that actually shipped during development and was
-caught by a screenshot — contradiction archiving, refinement, duplicate
-reinforcement, the empty-extraction ledger entry, U+202F normalisation,
-solicited answers, bidirectional links, BM25 injection safety.
-
-This matters because both providers deprecated a model mid-build
-(Groq dropped `llama-3.3-70b-versatile`, Sarvam retired `sarvam-m`). Model ids
-live in exactly one file, and the tests fail loudly if a swap changes behaviour.
+At 50,000 memories (`python bench/scale.py 50000`): 61MB database, a cold
+search takes about a second, a warm one 100 to 300ms. Past roughly 100,000
+memories the honest next step is a proper approximate search index. Below
+that it is not worth the extra dependency.
 
 ---
 
@@ -125,43 +218,70 @@ live in exactly one file, and the tests fail loudly if a swap changes behaviour.
 
 ```bash
 pip install -r requirements.txt
-copy .env.example .env          # then add SARVAM_API_KEY
+copy .env.example .env
+```
+
+Put your Sarvam key in `.env`. Groq works as a fallback if that is all you
+have, but you lose Indian language speech.
+
+```bash
+python seed.py --reset
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open <http://127.0.0.1:8000>.
+Open `http://127.0.0.1:8000`. Full steps, including how to run the tests
+and the evaluation, are in `RUN.md`.
 
-Kivi runs on Groq alone if that is all you have, but without a Sarvam key
-there is no Indic ASR and no speech output.
-
----
-
-## Before any demo
-
-Presence of an API key proves nothing — a key with no credits authenticates
-fine and fails every request. Check what is actually serving:
+**Before you rely on a demo.** Having a Sarvam key in `.env` does not mean
+Sarvam is actually answering. A key with no credit on the account
+authenticates fine and then fails every real request. Check what is
+actually serving:
 
 ```bash
 curl -s http://127.0.0.1:8000/api/integrations/preflight
 ```
 
-The server also prints a loud banner at startup when Sarvam is configured but
-not serving, and `KIVI_REQUIRE_SARVAM=true` makes it refuse to start at all
-rather than quietly answer on Groq.
+The server also prints this loudly at startup if Sarvam is configured but
+not working, rather than silently falling back and looking fine.
 
-## Honest limitations
+---
 
-- **Single user.** Signing in with Google identifies the owner and gates
-  connections; memories are not scoped per user. Multi-tenancy means a
-  `user_id` on every table — a real change, not a flag.
-- **OAuth is untested against live accounts.** The flows follow each
-  provider's documented spec; first connection may surface a redirect-URI
-  mismatch.
-- **Live data is search snippets, not instruments.** Weather can be hours
-  stale. Kivi discloses the staleness rather than hiding it; precise data
-  wants a purpose-built API.
-- **Retrieval is exact-ish, not semantic-perfect.** Citation gating is what
-  makes a weak retrieval safe rather than confidently wrong.
-- **No offline eval set yet.** Behaviour is pinned by 47 tests, but there is
-  no labelled corpus reporting filter precision/recall or retrieval hit@k.
-  That is the next thing worth building.
+## What I used Claude Code for
+
+I used Claude Code to write, debug and test the code in this repository,
+through an iterative back and forth where I reviewed what it built, pushed
+back on specific behaviour, and redirected it when something was wrong. A
+number of the technical design decisions described above, including the
+contradiction detection approach, the citation gate, and the hybrid search
+method, came out of that process rather than being specified by me in
+advance. I made the calls on what to build, what to cut, and what the
+product needed to do. Claude wrote the implementation and, in several
+places, proposed the approach after I described the problem.
+
+The product positioning and vision documents were written independently
+and are not generated by an AI tool.
+
+---
+
+## What I know is missing or weak
+
+- **One user.** Signing in with Google identifies whoever is running the
+  app, but nothing in the data is scoped per person. Making it multi-user
+  is a real change, a user column on every table, not a flag to flip.
+- **The connected app sign-ins, Gmail, Notion, Slack, are untested against
+  real accounts.** They follow each provider's documented flow. The first
+  real connection might hit a redirect URL mismatch or something else the
+  docs did not warn about.
+- **Live web answers, weather, prices, come from search result snippets,
+  not a live feed.** They can be hours old. Kivi says so in the answer
+  rather than stating a number like it is certain.
+- **No Tamil, Hindi or code mixed audio in the evaluation.** The corpus has
+  the sentences written down. Getting real speech samples for those and
+  scoring them properly is the most useful thing left to do here.
+- **Retrieval is good, not perfect,** which is exactly why the citation
+  gate matters as much as it does. It is the backstop for when retrieval
+  gets it wrong.
+- **The evaluation ran on Groq, not Sarvam,** because the Sarvam account
+  had no credit at the time. The corpus and the method are real. The
+  numbers should be rerun on Sarvam before anyone treats them as Sarvam's
+  own performance.

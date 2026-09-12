@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.db import get_connection, init_db
+from app.db import get_connection, init_db, migration_status
 from app.routes import auth, hey_kivi, integrations, memories, takes
 from app.services import cache as cache_service
 from app.services.llm_client import preflight, provider_status, require_sarvam
@@ -105,6 +105,7 @@ def health():
             "tables": tables,
             "models": provider_status(),
             "embedding_model": EMBEDDING_MODEL_NAME,
+            "migrations": migration_status(),
             "memories_cached": cache_size(),
             "cache": cache_service.stats(),
         }

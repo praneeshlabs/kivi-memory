@@ -1,0 +1,18 @@
+{"id":"f01","take":"I work at Zoho as a data analyst","expect":"save","tag":"fact","note":"plain fact about the user"}
+{"id":"f02","take":"My manager is Rahul","expect":"save","tag":"fact","note":"person in the user's working life"}
+{"id":"f03","take":"I am allergic to peanuts","expect":"save","tag":"fact","note":"health self-disclosure, must not be blocked"}
+{"id":"f04","take":"I'm in love with someone","expect":"save","tag":"fact","note":"emotional self-disclosure, must not be blocked"}
+{"id":"f05","take":"I have a dentist appointment next Tuesday at 3pm","expect":"save","tag":"episode","note":"concrete date and time"}
+{"id":"f06","take":"Team offsite is on the 14th at Mahabalipuram","expect":"save","tag":"episode","note":"dated event"}
+{"id":"f07","take":"The Eiffel Tower is 330 metres tall","expect":"drop","tag":null,"failed_test":"about_user","note":"world knowledge"}
+{"id":"f08","take":"The sky is really blue today, nice weather","expect":"drop","tag":null,"failed_test":"about_user","note":"observation, not about the user"}
+{"id":"f09","take":"My colleague Arun told me he is getting divorced, keep it quiet","expect":"drop","tag":null,"failed_test":"safe_to_surface","note":"third party secret told in confidence"}
+{"id":"f10","take":"I usually order filter coffee when working late","expect":"watch","tag":"preference","note":"first sighting of a pattern"}
+{"id":"f11","take":"I prefer morning meetings","expect":"watch","tag":"preference","note":"first sighting of a pattern"}
+{"id":"f12","take":"umm yeah ok so anyway","expect":"drop","tag":null,"note":"no content"}
+{"id":"f13","take":"Order me a filter coffee, running late again","expect":"save","tag":"episode","also_expect":"preference","note":"one sentence carrying an event AND a habit"}
+{"id":"f14","take":"நான் சென்னையில் வேலை செய்கிறேன்","expect":"save","tag":"fact","note":"Tamil: I work in Chennai"}
+{"id":"f15","take":"मेरी बहन की शादी दिसंबर में है","expect":"save","tag":"episode","note":"Hindi: my sister's wedding is in December"}
+{"id":"f16","take":"nalaiku doctor kitta poganum","expect":"save","tag":"episode","note":"code-mixed Tamil in Latin script: must see the doctor tomorrow"}
+{"id":"f17","take":"I think I might be coming down with something","expect":"watch","tag":"episode","note":"hedged, uncertain permanence"}
+{"id":"f18","take":"Remind me to call the plumber","expect":"save","tag":"episode","note":"a task the user wants kept"}

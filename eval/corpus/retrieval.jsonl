@@ -1,0 +1,17 @@
+{"id":"r01","query":"Where do I work?","expect_contains":"Zoho","note":"direct fact lookup"}
+{"id":"r02","query":"What is my blood group?","expect_contains":"O positive","note":"direct fact lookup"}
+{"id":"r03","query":"Who is my manager?","expect_contains":"Rahul","note":"person by role"}
+{"id":"r04","query":"What colour is Pixel?","expect_contains":"black and white","note":"proper noun, weak for embeddings"}
+{"id":"r05","query":"When is my dentist appointment?","expect_contains":"Tuesday","note":"episode by type"}
+{"id":"r06","query":"When is my sister getting married?","expect_contains":"December","note":"relation plus event"}
+{"id":"r07","query":"What coffee do I drink?","expect_contains":"filter coffee","note":"preference lookup"}
+{"id":"r08","query":"How do I sign off my emails?","expect_contains":"Warm regards","note":"preference with a quoted phrase"}
+{"id":"r09","query":"Am I allergic to anything?","expect_contains":"peanut","note":"health lookup, different wording"}
+{"id":"r10","query":"Where do I live?","expect_contains":"Adyar","note":"location, no shared keyword"}
+{"id":"r11","query":"What time of day do I work best?","expect_contains":"morning","note":"paraphrase, no shared keyword"}
+{"id":"r12","query":"எனக்கு எந்த ரத்த வகை?","expect_contains":"O positive","note":"Tamil query against an English memory"}
+{"id":"r13","query":"मेरा ऑफिस कहाँ है?","expect_contains":"Zoho","note":"Hindi query against an English memory"}
+{"id":"r14","query":"How do I get to work?","expect_contains":"cycle","note":"indirect, needs inference from the preference"}
+{"id":"r15","query":"What is the capital of Mongolia?","expect_contains":null,"note":"must decline, nothing in memory"}
+{"id":"r16","query":"Do I have a dog?","expect_contains":null,"note":"must decline, the user has a cat not a dog"}
+{"id":"r17","query":"What is my father's name?","expect_contains":null,"note":"must decline, never mentioned"}

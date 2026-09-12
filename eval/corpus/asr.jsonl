@@ -1,0 +1,11 @@
+{"id":"a01","reference":"I have a dentist appointment next Tuesday at three in the afternoon","lang":"en","synth":true,"note":"plain English"}
+{"id":"a02","reference":"My manager is Rahul and my skip level is Divya","lang":"en","synth":true,"note":"Indian names"}
+{"id":"a03","reference":"I work at Zoho in Chennai as a data analyst","lang":"en","synth":true,"note":"Indian company and city"}
+{"id":"a04","reference":"My sister Kavya is getting married in Coimbatore in December","lang":"en","synth":true,"note":"harder Indian place name"}
+{"id":"a05","reference":"I always order filter coffee when I am working late","lang":"en","synth":true,"note":"common phrase"}
+{"id":"a06","reference":"I cycle to work most mornings and it takes about forty minutes","lang":"en","synth":true,"note":"numbers as words"}
+{"id":"a07","reference":"I am allergic to peanuts quite badly","lang":"en","synth":true,"note":"health"}
+{"id":"a08","reference":"Book the usual table at Ananda for Friday evening","lang":"en","synth":true,"note":"proper noun plus request"}
+{"id":"a09","reference":"நாளைக்கு டாக்டர் கிட்ட போகணும்","lang":"ta","synth":false,"note":"Tamil, needs a human recording"}
+{"id":"a10","reference":"मुझे कल ऑफिस जल्दी जाना है","lang":"hi","synth":false,"note":"Hindi, needs a human recording"}
+{"id":"a11","reference":"nalaiku meeting iruku so I will come late","lang":"ta-en","synth":false,"note":"code mixed, needs a human recording"}

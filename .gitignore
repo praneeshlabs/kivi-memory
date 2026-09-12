@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .env
 kivi.db
+server.log
+*.log
+eval/results/*.local.*

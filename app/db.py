@@ -1,4 +1,4 @@
-"""SQLite connection handling and schema bootstrap for Kivi."""
+"""SQLite connection handling, schema bootstrap and migrations."""
 import os
 import sqlite3
 from pathlib import Path
@@ -6,6 +6,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATABASE_PATH = os.getenv("DATABASE_PATH", "kivi.db")
 SCHEMA_PATH = BASE_DIR / "schema.sql"
+MIGRATIONS_DIR = BASE_DIR / "migrations"
 
 
 def get_db_path() -> Path:
@@ -23,60 +24,103 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
-# Columns added after the original schema shipped. Kept here rather than in a
-# migration framework: SQLite can add a nullable column in place, and doing it
-# on startup means an existing kivi.db keeps working without being rebuilt.
-ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
-    ("watchlist", "tag", "TEXT"),
-    ("answers", "answer_source", "TEXT"),
-    ("answers", "follow_ups", "TEXT"),
-)
-
-
-# Tables added after the original schema shipped. Created on startup so an
-# existing kivi.db gains them without being rebuilt.
-ADDED_TABLES: tuple[str, ...] = (
-    """
-    CREATE TABLE IF NOT EXISTS oauth_tokens (
-        provider TEXT PRIMARY KEY,
-        access_token TEXT NOT NULL,
-        refresh_token TEXT,
-        token_type TEXT,
-        scopes TEXT,
-        expires_at TIMESTAMP,
-        account_label TEXT,
-        connected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+def _ensure_migrations_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version TEXT PRIMARY KEY,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
     )
-    """,
-)
 
 
-def _apply_added_tables(conn: sqlite3.Connection) -> None:
-    for statement in ADDED_TABLES:
-        conn.execute(statement)
+def applied_migrations(conn: sqlite3.Connection) -> set[str]:
+    _ensure_migrations_table(conn)
+    return {row["version"] for row in conn.execute("SELECT version FROM schema_migrations")}
 
 
-def _apply_added_columns(conn: sqlite3.Connection) -> None:
-    for table, column, column_type in ADDED_COLUMNS:
-        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
-        if column not in existing:
-            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
+def pending_migrations(conn: sqlite3.Connection) -> list[Path]:
+    if not MIGRATIONS_DIR.exists():
+        return []
+    done = applied_migrations(conn)
+    return [p for p in sorted(MIGRATIONS_DIR.glob("*.sql")) if p.stem not in done]
+
+
+def _is_already_applied(conn: sqlite3.Connection, statement: str) -> bool:
+    """True if this statement's change is already present.
+
+    A fresh database is created from schema.sql, which already contains
+    everything the migrations add. Re-running an ALTER there would fail, so
+    each migration is checked against the live schema before it runs. This
+    keeps one code path for both a new install and an upgrade.
+    """
+    lowered = " ".join(statement.lower().split())
+    if not lowered.startswith("alter table"):
+        return False
+    parts = lowered.split()
+    try:
+        table = parts[2]
+        column = parts[parts.index("column") + 1]
+    except (IndexError, ValueError):
+        return False
+    existing = {row["name"].lower() for row in conn.execute(f"PRAGMA table_info({table})")}
+    return column in existing
+
+
+def _statements(sql: str) -> list[str]:
+    """Split a migration file into executable statements.
+
+    Comment lines are stripped before splitting, not after. Every migration
+    here opens with an explanatory comment block, and a naive "skip chunks
+    starting with --" check silently discarded the statement attached to it.
+    """
+    cleaned_lines = [
+        line for line in sql.splitlines() if not line.strip().startswith("--")
+    ]
+    cleaned = "\n".join(cleaned_lines)
+    return [chunk.strip() for chunk in cleaned.split(";") if chunk.strip()]
+
+
+def run_migrations(conn: sqlite3.Connection) -> list[str]:
+    """Apply every migration that has not run yet. Returns the versions applied."""
+    _ensure_migrations_table(conn)
+    applied: list[str] = []
+
+    for path in pending_migrations(conn):
+        for statement in _statements(path.read_text(encoding="utf-8")):
+            if _is_already_applied(conn, statement):
+                continue
+            conn.execute(statement)
+        conn.execute("INSERT INTO schema_migrations (version) VALUES (?)", (path.stem,))
+        applied.append(path.stem)
+
+    conn.commit()
+    return applied
 
 
 def init_db() -> None:
-    """Run schema.sql if the schema is absent, then top up any newer columns."""
+    """Create the schema if it is absent, then bring it up to date."""
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='takes'"
-        )
-        already_initialized = cursor.fetchone() is not None
-        if not already_initialized:
-            schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
-            conn.executescript(schema_sql)
-        _apply_added_tables(conn)
-        _apply_added_columns(conn)
-        conn.commit()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='takes'")
+        fresh = cursor.fetchone() is None
+        if fresh:
+            conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+            conn.commit()
+        run_migrations(conn)
+    finally:
+        conn.close()
+
+
+def migration_status() -> dict:
+    """What has run and what is waiting. Used by the health endpoint."""
+    conn = get_connection()
+    try:
+        return {
+            "applied": sorted(applied_migrations(conn)),
+            "pending": [p.stem for p in pending_migrations(conn)],
+        }
     finally:
         conn.close()

@@ -1,16 +1,0 @@
-INFO:     Started server process [18288]
-INFO:     Waiting for application startup.
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|##########| 199/199 [00:00<00:00, 2680.73it/s]
-INFO:     Application startup complete.
-ERROR:    [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8000): [winerror 10048] only one usage of each socket address (protocol/network address/port) is normally permitted
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-
-========================================================================
-[kivi] SARVAM NOT SERVING: Sarvam is configured but not serving; Groq is answering instead
-       HTTP 402: {"error":{"message":"No credits available.","code":"insufficient_quota_error","request_id":"20260912_c9050ff2-725d-476f-8d9b-c7ba4c7b127e"}}
-       Requests will be answered by Groq (non-Indic models).
-       Speech-to-text and spoken replies are unavailable.
-========================================================================
-

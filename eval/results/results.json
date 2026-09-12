@@ -1,0 +1,595 @@
+{
+  "generated_at": "2026-09-12T20:42:51",
+  "provider": {
+    "active": "groq (sarvam fallback)",
+    "sarvam_last_error": "HTTP 402: {\"error\":{\"message\":\"No credits available.\",\"code\":\"insufficient_quota_error\",\"request_id\":\"20260912_97dfebc0-bed3-41a0-bb29-9aa07343fe40\"}}",
+    "sarvam_configured": true,
+    "groq_configured": true,
+    "sarvam_healthy": false,
+    "chat_model": "openai/gpt-oss-120b",
+    "stt_model": "whisper-large-v3-turbo",
+    "tts_model": "bulbul:v3",
+    "tts_available": false,
+    "sarvam_note": "Sarvam is configured but not serving; Groq is answering instead"
+  },
+  "suites": [
+    {
+      "suite": "filter",
+      "cases": [
+        {
+          "id": "f01",
+          "take": "I work at Zoho as a data analyst",
+          "expected": "save",
+          "got": "save",
+          "pass": true,
+          "expected_tag": "fact",
+          "got_tags": [
+            "fact"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "plain fact about the user"
+        },
+        {
+          "id": "f02",
+          "take": "My manager is Rahul",
+          "expected": "save",
+          "got": "save",
+          "pass": true,
+          "expected_tag": "fact",
+          "got_tags": [
+            "fact"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "person in the user's working life"
+        },
+        {
+          "id": "f03",
+          "take": "I am allergic to peanuts",
+          "expected": "save",
+          "got": "save",
+          "pass": true,
+          "expected_tag": "fact",
+          "got_tags": [
+            "fact"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "health self-disclosure, must not be blocked"
+        },
+        {
+          "id": "f04",
+          "take": "I'm in love with someone",
+          "expected": "save",
+          "got": "save",
+          "pass": true,
+          "expected_tag": "fact",
+          "got_tags": [
+            "fact"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "emotional self-disclosure, must not be blocked"
+        },
+        {
+          "id": "f05",
+          "take": "I have a dentist appointment next Tuesday at 3pm",
+          "expected": "save",
+          "got": "save",
+          "pass": true,
+          "expected_tag": "episode",
+          "got_tags": [
+            "episode"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "concrete date and time"
+        },
+        {
+          "id": "f06",
+          "take": "Team offsite is on the 14th at Mahabalipuram",
+          "expected": "save",
+          "got": "save",
+          "pass": true,
+          "expected_tag": "episode",
+          "got_tags": [
+            "episode"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "dated event"
+        },
+        {
+          "id": "f07",
+          "take": "The Eiffel Tower is 330 metres tall",
+          "expected": "drop",
+          "got": "drop",
+          "pass": true,
+          "expected_tag": null,
+          "got_tags": [],
+          "also_expected": null,
+          "also_found": true,
+          "note": "world knowledge"
+        },
+        {
+          "id": "f08",
+          "take": "The sky is really blue today, nice weather",
+          "expected": "drop",
+          "got": "drop",
+          "pass": true,
+          "expected_tag": null,
+          "got_tags": [],
+          "also_expected": null,
+          "also_found": true,
+          "note": "observation, not about the user"
+        },
+        {
+          "id": "f09",
+          "take": "My colleague Arun told me he is getting divorced, keep it quiet",
+          "expected": "drop",
+          "got": "drop",
+          "pass": true,
+          "expected_tag": null,
+          "got_tags": [
+            null
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "third party secret told in confidence"
+        },
+        {
+          "id": "f10",
+          "take": "I usually order filter coffee when working late",
+          "expected": "watch",
+          "got": "watch",
+          "pass": true,
+          "expected_tag": "preference",
+          "got_tags": [
+            "preference"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "first sighting of a pattern"
+        },
+        {
+          "id": "f11",
+          "take": "I prefer morning meetings",
+          "expected": "watch",
+          "got": "watch",
+          "pass": true,
+          "expected_tag": "preference",
+          "got_tags": [
+            "preference"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "first sighting of a pattern"
+        },
+        {
+          "id": "f12",
+          "take": "umm yeah ok so anyway",
+          "expected": "drop",
+          "got": "drop",
+          "pass": true,
+          "expected_tag": null,
+          "got_tags": [],
+          "also_expected": null,
+          "also_found": true,
+          "note": "no content"
+        },
+        {
+          "id": "f13",
+          "take": "Order me a filter coffee, running late again",
+          "expected": "save",
+          "got": "save",
+          "pass": true,
+          "expected_tag": "episode",
+          "got_tags": [
+            "episode",
+            "preference"
+          ],
+          "also_expected": "preference",
+          "also_found": true,
+          "note": "one sentence carrying an event AND a habit"
+        },
+        {
+          "id": "f14",
+          "take": "நான் சென்னையில் வேலை செய்கிறேன்",
+          "expected": "save",
+          "got": "save",
+          "pass": true,
+          "expected_tag": "fact",
+          "got_tags": [
+            "fact"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "Tamil: I work in Chennai"
+        },
+        {
+          "id": "f15",
+          "take": "मेरी बहन की शादी दिसंबर में है",
+          "expected": "save",
+          "got": "save",
+          "pass": false,
+          "expected_tag": "episode",
+          "got_tags": [
+            "fact"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "Hindi: my sister's wedding is in December"
+        },
+        {
+          "id": "f16",
+          "take": "nalaiku doctor kitta poganum",
+          "expected": "save",
+          "got": "save",
+          "pass": true,
+          "expected_tag": "episode",
+          "got_tags": [
+            "episode"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "code-mixed Tamil in Latin script: must see the doctor tomorrow"
+        },
+        {
+          "id": "f17",
+          "take": "I think I might be coming down with something",
+          "expected": "watch",
+          "got": "save",
+          "pass": false,
+          "expected_tag": "episode",
+          "got_tags": [
+            "episode"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "hedged, uncertain permanence"
+        },
+        {
+          "id": "f18",
+          "take": "Remind me to call the plumber",
+          "expected": "save",
+          "got": "watch",
+          "pass": false,
+          "expected_tag": "episode",
+          "got_tags": [
+            "preference"
+          ],
+          "also_expected": null,
+          "also_found": true,
+          "note": "a task the user wants kept"
+        }
+      ],
+      "accuracy": 0.833,
+      "decision_accuracy": 0.889,
+      "per_class": {
+        "save": {
+          "precision": 0.909,
+          "recall": 0.909,
+          "support": 11
+        },
+        "watch": {
+          "precision": 0.667,
+          "recall": 0.667,
+          "support": 3
+        },
+        "drop": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 4
+        }
+      },
+      "wrongly_dropped": [],
+      "wrongly_dropped_count": 0
+    },
+    {
+      "suite": "retrieval",
+      "cases": [
+        {
+          "id": "r01",
+          "query": "Where do I work?",
+          "expect_contains": "Zoho",
+          "rank": null,
+          "top_score": 0.252,
+          "pass": false,
+          "result": "not retrieved",
+          "note": "direct fact lookup"
+        },
+        {
+          "id": "r02",
+          "query": "What is my blood group?",
+          "expect_contains": "O positive",
+          "rank": 1,
+          "top_score": 0.649,
+          "pass": true,
+          "result": "rank 1",
+          "note": "direct fact lookup"
+        },
+        {
+          "id": "r03",
+          "query": "Who is my manager?",
+          "expect_contains": "Rahul",
+          "rank": 1,
+          "top_score": 0.464,
+          "pass": true,
+          "result": "rank 1",
+          "note": "person by role"
+        },
+        {
+          "id": "r04",
+          "query": "What colour is Pixel?",
+          "expect_contains": "black and white",
+          "rank": 1,
+          "top_score": 0.553,
+          "pass": true,
+          "result": "rank 1",
+          "note": "proper noun, weak for embeddings"
+        },
+        {
+          "id": "r05",
+          "query": "When is my dentist appointment?",
+          "expect_contains": "Tuesday",
+          "rank": 1,
+          "top_score": 0.818,
+          "pass": true,
+          "result": "rank 1",
+          "note": "episode by type"
+        },
+        {
+          "id": "r06",
+          "query": "When is my sister getting married?",
+          "expect_contains": "December",
+          "rank": 1,
+          "top_score": 0.608,
+          "pass": true,
+          "result": "rank 1",
+          "note": "relation plus event"
+        },
+        {
+          "id": "r07",
+          "query": "What coffee do I drink?",
+          "expect_contains": "filter coffee",
+          "rank": 1,
+          "top_score": 0.631,
+          "pass": true,
+          "result": "rank 1",
+          "note": "preference lookup"
+        },
+        {
+          "id": "r08",
+          "query": "How do I sign off my emails?",
+          "expect_contains": "Warm regards",
+          "rank": 1,
+          "top_score": 0.704,
+          "pass": true,
+          "result": "rank 1",
+          "note": "preference with a quoted phrase"
+        },
+        {
+          "id": "r09",
+          "query": "Am I allergic to anything?",
+          "expect_contains": "peanut",
+          "rank": 4,
+          "top_score": 0.079,
+          "pass": false,
+          "result": "rank 4",
+          "note": "health lookup, different wording"
+        },
+        {
+          "id": "r10",
+          "query": "Where do I live?",
+          "expect_contains": "Adyar",
+          "rank": 1,
+          "top_score": 0.262,
+          "pass": true,
+          "result": "rank 1",
+          "note": "location, no shared keyword"
+        },
+        {
+          "id": "r11",
+          "query": "What time of day do I work best?",
+          "expect_contains": "morning",
+          "rank": 1,
+          "top_score": 0.56,
+          "pass": true,
+          "result": "rank 1",
+          "note": "paraphrase, no shared keyword"
+        },
+        {
+          "id": "r12",
+          "query": "எனக்கு எந்த ரத்த வகை?",
+          "expect_contains": "O positive",
+          "rank": 1,
+          "top_score": 0.42,
+          "pass": true,
+          "result": "rank 1",
+          "note": "Tamil query against an English memory"
+        },
+        {
+          "id": "r13",
+          "query": "मेरा ऑफिस कहाँ है?",
+          "expect_contains": "Zoho",
+          "rank": null,
+          "top_score": 0.318,
+          "pass": false,
+          "result": "not retrieved",
+          "note": "Hindi query against an English memory"
+        },
+        {
+          "id": "r14",
+          "query": "How do I get to work?",
+          "expect_contains": "cycle",
+          "rank": 1,
+          "top_score": 0.362,
+          "pass": true,
+          "result": "rank 1",
+          "note": "indirect, needs inference from the preference"
+        },
+        {
+          "id": "r15",
+          "query": "What is the capital of Mongolia?",
+          "expect_contains": null,
+          "rank": null,
+          "top_score": 0.2,
+          "pass": true,
+          "result": "no target, handled by the citation gate",
+          "note": "must decline, nothing in memory"
+        },
+        {
+          "id": "r16",
+          "query": "Do I have a dog?",
+          "expect_contains": null,
+          "rank": null,
+          "top_score": 0.155,
+          "pass": true,
+          "result": "no target, handled by the citation gate",
+          "note": "must decline, the user has a cat not a dog"
+        },
+        {
+          "id": "r17",
+          "query": "What is my father's name?",
+          "expect_contains": null,
+          "rank": null,
+          "top_score": 0.162,
+          "pass": true,
+          "result": "no target, handled by the citation gate",
+          "note": "must decline, never mentioned"
+        }
+      ],
+      "hit_at_1": 0.786,
+      "hit_at_3": 0.786,
+      "hit_at_5": 0.857,
+      "missed": [
+        "r01",
+        "r13"
+      ],
+      "mean_top_score": 0.477
+    },
+    {
+      "suite": "asr",
+      "cases": [
+        {
+          "id": "a01",
+          "lang": "en",
+          "reference": "I have a dentist appointment next Tuesday at three in the afternoon",
+          "hypothesis": "I have a dentist appointment next Tuesday at 3 in the afternoon.",
+          "detected_language": "unknown",
+          "wer": 0.083,
+          "status": "scored",
+          "note": "plain English"
+        },
+        {
+          "id": "a02",
+          "lang": "en",
+          "reference": "My manager is Rahul and my skip level is Divya",
+          "hypothesis": "My manager is Rahul and my skip level is Davya.",
+          "detected_language": "unknown",
+          "wer": 0.1,
+          "status": "scored",
+          "note": "Indian names"
+        },
+        {
+          "id": "a03",
+          "lang": "en",
+          "reference": "I work at Zoho in Chennai as a data analyst",
+          "hypothesis": "I work at Zoho in Chennai as a data analyst.",
+          "detected_language": "unknown",
+          "wer": 0.0,
+          "status": "scored",
+          "note": "Indian company and city"
+        },
+        {
+          "id": "a04",
+          "lang": "en",
+          "reference": "My sister Kavya is getting married in Coimbatore in December",
+          "hypothesis": "My sister Kavya is getting married in Combattore in December.",
+          "detected_language": "unknown",
+          "wer": 0.1,
+          "status": "scored",
+          "note": "harder Indian place name"
+        },
+        {
+          "id": "a05",
+          "lang": "en",
+          "reference": "I always order filter coffee when I am working late",
+          "hypothesis": "I always order filter coffee when I am working late.",
+          "detected_language": "unknown",
+          "wer": 0.0,
+          "status": "scored",
+          "note": "common phrase"
+        },
+        {
+          "id": "a06",
+          "lang": "en",
+          "reference": "I cycle to work most mornings and it takes about forty minutes",
+          "hypothesis": "I cycle to work most mornings and it takes about 40 minutes.",
+          "detected_language": "unknown",
+          "wer": 0.083,
+          "status": "scored",
+          "note": "numbers as words"
+        },
+        {
+          "id": "a07",
+          "lang": "en",
+          "reference": "I am allergic to peanuts quite badly",
+          "hypothesis": "I am allergic to peanuts quite badly.",
+          "detected_language": "unknown",
+          "wer": 0.0,
+          "status": "scored",
+          "note": "health"
+        },
+        {
+          "id": "a08",
+          "lang": "en",
+          "reference": "Book the usual table at Ananda for Friday evening",
+          "hypothesis": "Book the usual table at Ananda for Friday evening.",
+          "detected_language": "unknown",
+          "wer": 0.0,
+          "status": "scored",
+          "note": "proper noun plus request"
+        },
+        {
+          "id": "a09",
+          "lang": "ta",
+          "reference": "நாளைக்கு டாக்டர் கிட்ட போகணும்",
+          "hypothesis": null,
+          "wer": null,
+          "status": "untested, needs a human recording",
+          "note": "Tamil, needs a human recording"
+        },
+        {
+          "id": "a10",
+          "lang": "hi",
+          "reference": "मुझे कल ऑफिस जल्दी जाना है",
+          "hypothesis": null,
+          "wer": null,
+          "status": "untested, needs a human recording",
+          "note": "Hindi, needs a human recording"
+        },
+        {
+          "id": "a11",
+          "lang": "ta-en",
+          "reference": "nalaiku meeting iruku so I will come late",
+          "hypothesis": null,
+          "wer": null,
+          "status": "untested, needs a human recording",
+          "note": "code mixed, needs a human recording"
+        }
+      ],
+      "scored_count": 8,
+      "untested_count": 3,
+      "mean_wer": 0.046,
+      "perfect": [
+        "a03",
+        "a05",
+        "a07",
+        "a08"
+      ],
+      "worst": "a02"
+    }
+  ]
+}

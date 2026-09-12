@@ -5,7 +5,9 @@ questions from what it kept — with a citation for every claim, or an honest
 "I don't know".
 
 Built on the **Sarvam** stack (Sarvam chat, Saaras ASR, Bulbul TTS) so it works
-in Indian languages and code-mixed speech, not just English.
+in Indian languages and code-mixed speech, not just English, with Groq as a
+fallback. Which one is actually serving is reported, never assumed — see
+[Before any demo](#before-any-demo).
 
 ---
 
@@ -65,7 +67,7 @@ Voice / text
 
 | Layer | Choice | Why |
 |---|---|---|
-| Chat | Sarvam (`sarvam-30b`), Groq fallback | Indic-native; Sarvam-M was retired, 30B is its successor |
+| Chat | Sarvam (`sarvam-105b`), Groq fallback | Indic-native. Sarvam-M was retired and `sarvam-30b` is not on the GA endpoint; the API itself names the live set |
 | ASR | Saaras `v4`, Whisper fallback | handles code-mixed Tamil/Hindi–English |
 | TTS | Bulbul `v3` | answers spoken back in 11 Indian languages |
 | Embeddings | `paraphrase-multilingual-MiniLM-L12-v2` | 384-dim, cross-lingual retrieval |

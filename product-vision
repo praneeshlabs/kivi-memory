@@ -1,0 +1,41 @@
+## Product Vision Document
+
+Today, Kivi transcribes my voice into text wherever my cursor is pointed. Its existing experience is built around my Dictionary, Shortcuts, and Styles. Semantic memory changes this from a searchable log of what I have said to something “Hey Kivi” can actually use to help me.
+
+I see Kivi becoming a Partner that acts and chooses with me and sometimes for me. The progression should not happen because Kivi can technically do more. It should happen because Kivi has earned the trust to do more.
+
+I don't think the value of semantic memory is simply storing more of what I said. The value appears when Kivi can connect what I said to what I need now. For example, when I say, “Hey Kivi, find the dictation I did at 5 pm and polish it for today's meeting”, Kivi should be able to know that I dictated something to XX at that time and how I usually write for meetings.
+
+A memory earns its place only when it is **about me**, **likely to matter again**, and **safe to surface later**. This keeps semantic memory focused on information that is useful without becoming a hidden record of me.
+
+I would represent remembered understanding as three types:
+
+- **Fact:** something stable about myself that stays true until contradicted.
+- **Episode:** something that happened, useful for a window of time.
+- **Preference:** a pattern that gets stronger with repetition.
+
+This distinction matters because each has a different lifecycle and is used differently by Hey Kivi. A memory should also be retired to the archive so old memory does not stand in for what is true today.
+
+**Semantic memory is useful only if there is a boundary around what it is allowed to assume.**
+
+First, Kivi must never turn a passing mention into a standing rule about the user.
+
+Second, it must never treat what was true a while ago as what is true today without sufficient evidence.
+
+Third, it must never use semantic memory to quietly change what the user actually said when they dictate.
+
+Most importantly, I would draw a hard boundary between dictation and Hey Kivi: memory can shape how Hey Kivi answers, recalls, and reasons, but must never touch the words that leave the user's mouth as dictation.
+
+> Dictation carries the user's voice; memory has no right to alter it.
+
+Kivi should extend a trust pattern it already has rather than introduce a hidden new one. Today, Dictionary, Shortcuts, and Styles are things the user sets themselves, and things the user can see, edit, or remove at any time. Semantic memory should follow the same deal: **visible, editable, honest**.
+
+If Kivi remembers something incorrectly, the user can open the memory page and correct it or remove it. If a memory is no longer true, the memory is retired to the archive and stops shaping Hey Kivi's answers. If Kivi does not know something, it says so plainly instead of guessing.
+
+The principle is simple: Kivi earns trust by staying visible, letting the user stay in charge, and being honest when it does not know.
+
+Kivi should not jump directly from Recorder to Partner. The progression should be earned. First, memory allows Kivi to understand what the user has been working on across their takes. As the system develops reliable understanding of the user's preferences, patterns, and recurring context, it can become an Assistant and help with things the user has not asked for yet but would want done. Only when the user has seen enough of Kivi's memory to trust it with more should Kivi take on acting with the user, and sometimes on their behalf.
+
+This means memory earns trust, and trust earns responsibility. The user should be able to see what Kivi has learned, correct it, and decide when Kivi is ready to do more, so Kivi grows only as fast as the user allows.
+
+**Memory earns trust. Trust earns the next step. Neither can move without the other.**

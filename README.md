@@ -9,6 +9,11 @@ Built for Indian users, on Sarvam's models, so it can hear Tamil, Hindi and
 the code-mixed English people actually speak. Groq is a fallback so the app
 still runs on days that stack is not available.
 
+The product thinking behind this is in [product-position](product-position)
+and [product-vision](product-vision). This file covers the build: what it
+does, how, what was tested, and what is not done yet. How to run it
+yourself is in [RUN.md](RUN.md).
+
 ---
 
 ## What it is for

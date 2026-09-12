@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kivi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">Kivi<span class="dot">.</span></div>
+    <nav class="nav">
+      <button class="nav-item active" data-view="record">Record</button>
+      <button class="nav-item" data-view="heykivi">Hey Kivi</button>
+      <button class="nav-item" data-view="memory">Memory</button>
+      <button class="nav-item" data-view="apps">Connections</button>
+    </nav>
+  </aside>
+
+  <main class="main">
+
+    <!-- ------------------------------------------------------ record --- -->
+    <section class="view active" id="view-record">
+      <h1 class="view-title">Record</h1>
+      <p class="view-sub">Speak or type. Kivi decides what's worth keeping.</p>
+
+      <textarea id="take-input" rows="4"
+        placeholder="I have a meeting with Priya about the offsite project at 5pm today&hellip;"></textarea>
+
+      <div class="form-row">
+        <button class="btn" id="take-submit">Submit Take</button>
+        <button class="btn-record" id="record-toggle" title="Record audio dictation">
+          <span class="mic-dot"></span><span id="record-label">Record Audio</span>
+        </button>
+        <span class="loading" id="take-status" hidden>Thinking&hellip;</span>
+      </div>
+      <div class="error" id="take-error" hidden></div>
+
+      <div class="section-label">This Session</div>
+      <div id="take-list"><p class="empty">Nothing recorded yet.</p></div>
+    </section>
+
+    <!-- ----------------------------------------------------- hey kivi --- -->
+    <section class="view" id="view-heykivi">
+      <h1 class="view-title">Hey Kivi</h1>
+      <p class="view-sub">Ask what Kivi remembers, or just tell it something new.</p>
+
+      <div class="chat" id="chat"></div>
+
+      <div class="ask-row">
+        <input type="text" id="query-input" placeholder="Where am I working now?">
+        <button class="btn-record" id="ask-record-toggle" title="Speak instead of typing">
+          <span class="mic-dot"></span><span id="ask-record-label">Speak</span>
+        </button>
+        <button class="btn" id="query-submit">Send</button>
+      </div>
+      <div class="loading" id="query-status" hidden>Searching memory&hellip;</div>
+      <div class="error" id="query-error" hidden></div>
+    </section>
+
+    <!-- ------------------------------------------------------- memory --- -->
+    <section class="view" id="view-memory">
+      <h1 class="view-title">Memory</h1>
+      <p class="view-sub">Everything Kivi currently holds, grouped by kind.</p>
+      <div class="error" id="memory-error" hidden></div>
+      <div id="memory-list"><p class="loading">Loading&hellip;</p></div>
+    </section>
+
+    <!-- --------------------------------------------------------- apps --- -->
+    <section class="view" id="view-apps">
+      <h1 class="view-title">Connections</h1>
+      <p class="view-sub">Apps Kivi can learn from, and act through.</p>
+      <div class="error" id="apps-error" hidden></div>
+      <div id="apps-list"><p class="loading">Loading&hellip;</p></div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ------------------------------------------------------------- helpers
+  var $ = function (id) { return document.getElementById(id); };
+
+  function esc(text) {
+    return String(text == null ? "" : text)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function titleCase(text) {
+    return String(text || "").replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
+  }
+
+  // Server timestamps are UTC ("YYYY-MM-DD HH:MM:SS"); render them locally.
+  function fmtTime(stamp) {
+    if (!stamp) { return ""; }
+    var parsed = new Date(String(stamp).replace(" ", "T") + "Z");
+    if (isNaN(parsed.getTime())) { return String(stamp); }
+    return parsed.toLocaleString([], {
+      month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+    });
+  }
+
+  function show(el, visible) { el.hidden = !visible; }
+
+  function showError(el, message) {
+    el.textContent = message;
+    show(el, true);
+  }
+
+  async function api(path, options) {
+    var response = await fetch(path, options);
+    var body = null;
+    try { body = await response.json(); } catch (e) { /* non-JSON error body */ }
+    if (!response.ok) {
+      var detail = body && body.detail ? body.detail : response.status + " " + response.statusText;
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    }
+    return body;
+  }
+
+  function postJSON(path, payload) {
+    return api(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  }
+
+  // ------------------------------------------------------ audio capture
+  // One recorder factory, reused by Record and Hey Kivi.
+  function createRecorder(options) {
+    var mediaRecorder = null;
+    var chunks = [];
+    var stream = null;
+    var recording = false;
+
+    async function start() {
+      if (!navigator.mediaDevices || !window.MediaRecorder) {
+        options.onError("This browser can't record audio. Type instead.");
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        options.onError("Microphone permission denied or unavailable.");
+        return;
+      }
+      chunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.addEventListener("dataavailable", function (event) {
+        if (event.data && event.data.size) { chunks.push(event.data); }
+      });
+      mediaRecorder.addEventListener("stop", function () {
+        stream.getTracks().forEach(function (track) { track.stop(); });
+        var blob = new Blob(chunks, { type: mediaRecorder.mimeType || "audio/webm" });
+        if (blob.size) { options.onComplete(blob); }
+      });
+      mediaRecorder.start();
+      recording = true;
+      options.onStateChange(true);
+    }
+
+    function stop() {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") { mediaRecorder.stop(); }
+      recording = false;
+      options.onStateChange(false);
+    }
+
+    return {
+      toggle: function () { return recording ? stop() : start(); },
+      isRecording: function () { return recording; }
+    };
+  }
+
+  function uploadAudio(blob) {
+    var form = new FormData();
+    form.append("audio", blob, "dictation.webm");
+    return api("/api/takes/audio", { method: "POST", body: form });
+  }
+
+  // ---------------------------------------------------------- navigation
+  var views = {
+    record: $("view-record"), heykivi: $("view-heykivi"),
+    memory: $("view-memory"), apps: $("view-apps")
+  };
+
+  Array.prototype.forEach.call(document.querySelectorAll(".nav-item"), function (button) {
+    button.addEventListener("click", function () {
+      var target = button.dataset.view;
+      Array.prototype.forEach.call(document.querySelectorAll(".nav-item"), function (other) {
+        other.classList.toggle("active", other === button);
+      });
+      Object.keys(views).forEach(function (name) {
+        views[name].classList.toggle("active", name === target);
+      });
+      if (target === "memory") { loadMemories(); }
+      if (target === "apps") { loadIntegrations(); }
+    });
+  });
+
+  // -------------------------------------------------------- record view
+  // Takes accumulate for this browser session; each entry is the pipeline's
+  // own saved/watched/dropped verdict for that submission.
+  var sessionTakes = [];
+
+  function outcomeRows(result) {
+    var rows = [];
+    (result.saved || []).forEach(function (item) {
+      var superseded = item.superseded_memory_ids || [];
+      var note = superseded.length ? " (replaced what I knew before)"
+               : item.action === "reinforced_existing" ? " (already knew this, noted again)"
+               : item.promoted_from_watchlist_id ? " (promoted from watchlist)" : "";
+      rows.push({ kind: "saved", label: item.tag || "saved", text: item.content + note });
+    });
+    (result.watched || []).forEach(function (item) {
+      if (item.promoted) { return; } // already listed under saved
+      rows.push({
+        kind: "watched",
+        label: "Watching " + item.times_seen + "/" + item.promote_threshold,
+        text: item.content
+      });
+    });
+    (result.dropped || []).forEach(function (item) {
+      rows.push({ kind: "dropped", label: item.failed_test || "Dropped", text: item.reason });
+    });
+    return rows;
+  }
+
+  function renderTakes() {
+    var host = $("take-list");
+    if (!sessionTakes.length) {
+      host.innerHTML = '<p class="empty">Nothing recorded yet.</p>';
+      return;
+    }
+    host.innerHTML = sessionTakes.map(function (entry) {
+      var rows = outcomeRows(entry.result).map(function (row) {
+        return '<div class="outcome-item">'
+             +   '<span class="tag tag-' + row.kind + '">' + esc(titleCase(row.label)) + '</span>'
+             +   '<span>' + esc(row.text) + '</span>'
+             + '</div>';
+      }).join("");
+      return '<div class="take-card">'
+           +   '<p class="take-text">' + esc(entry.text) + '</p>'
+           +   '<div class="take-meta">'
+           +     (entry.viaAudio ? '<span class="via-audio">Transcribed</span> &middot; ' : "")
+           +     'Take #' + entry.result.take_id + ' &middot; ' + esc(entry.at)
+           +   '</div>'
+           +   '<div class="outcome">' + (rows || '<span class="empty">No outcome recorded.</span>') + '</div>'
+           + '</div>';
+    }).join("");
+  }
+
+  function recordResult(text, result, viaAudio) {
+    sessionTakes.unshift({
+      text: text,
+      result: result,
+      viaAudio: !!viaAudio,
+      at: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    });
+    renderTakes();
+  }
+
+  async function submitTake() {
+    var input = $("take-input");
+    var text = input.value.trim();
+    if (!text) { return; }
+
+    show($("take-error"), false);
+    show($("take-status"), true);
+    $("take-submit").disabled = true;
+    try {
+      var result = await postJSON("/api/takes", { raw_text: text });
+      input.value = "";
+      recordResult(text, result, false);
+    } catch (err) {
+      showError($("take-error"), "Could not save take: " + err.message);
+    } finally {
+      show($("take-status"), false);
+      $("take-submit").disabled = false;
+    }
+  }
+
+  $("take-submit").addEventListener("click", submitTake);
+  $("take-input").addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { submitTake(); }
+  });
+
+  var takeRecorder = createRecorder({
+    onError: function (message) { showError($("take-error"), message); },
+    onStateChange: function (isRecording) {
+      $("record-toggle").classList.toggle("recording", isRecording);
+      $("record-label").textContent = isRecording ? "Stop & Transcribe" : "Record Audio";
+    },
+    onComplete: async function (blob) {
+      show($("take-error"), false);
+      $("take-status").textContent = "Transcribing…";
+      show($("take-status"), true);
+      try {
+        var result = await uploadAudio(blob);
+        recordResult(result.transcript, result, true);
+      } catch (err) {
+        showError($("take-error"), "Could not transcribe: " + err.message);
+      } finally {
+        $("take-status").textContent = "Thinking…";
+        show($("take-status"), false);
+      }
+    }
+  });
+  $("record-toggle").addEventListener("click", function () { takeRecorder.toggle(); });
+
+  // ------------------------------------------------------ hey kivi view
+  // Conversation turns for this session, sent with each message so Kivi can
+  // resolve "it" / "her" / "that" against what was just said.
+  var conversation = [];
+
+  function rememberTurn(role, text) {
+    conversation.push({ role: role, text: text });
+    if (conversation.length > 12) { conversation = conversation.slice(-12); }
+  }
+
+  function appendMessage(html) {
+    $("chat").insertAdjacentHTML("beforeend", html);
+    $("chat").lastElementChild.scrollIntoView({ block: "nearest" });
+  }
+
+  function citationsHTML(cited) {
+    if (!cited || !cited.length) { return ""; }
+    var items = cited.map(function (memory) {
+      return '<li>' + esc(memory.content)
+           + ' <span class="cite-time">&mdash; Take #' + memory.source_take_id
+           + ', ' + esc(fmtTime(memory.source_take_created_at)) + '</span></li>';
+    }).join("");
+    return '<div class="citations">'
+         +   '<span class="cite-head">Based On</span><ul>' + items + '</ul>'
+         + '</div>';
+  }
+
+  // Where an answer came from is never left ambiguous: memory-backed answers
+  // carry their citations, anything else is labelled as not from memory.
+  var SOURCE_LABELS = {
+    memory:  { label: "From Your Memory", cls: "src-memory" },
+    mixed:   { label: "Memory + General Knowledge", cls: "src-mixed" },
+    general: { label: "General Knowledge — Not From Your Memory", cls: "src-general" },
+    live:    { label: "From The Web", cls: "src-live" }
+  };
+
+  function sourceBadgeHTML(source) {
+    var meta = SOURCE_LABELS[source];
+    return meta ? '<span class="src-badge ' + meta.cls + '">' + esc(meta.label) + '</span>' : "";
+  }
+
+  function webSourcesHTML(sources) {
+    if (!sources || !sources.length) { return ""; }
+    var items = sources.map(function (s) {
+      return '<li><a href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">'
+           + esc(s.title || s.url) + '</a></li>';
+    }).join("");
+    return '<div class="citations"><span class="cite-head">Sources</span><ul>'
+         + items + '</ul></div>';
+  }
+
+  function followUpsHTML(questions) {
+    if (!questions || !questions.length) { return ""; }
+    var chips = questions.map(function (q) {
+      return '<button class="chip" data-followup="' + esc(q) + '">' + esc(q) + '</button>';
+    }).join("");
+    return '<div class="follow-ups">'
+         +   '<span class="cite-head">So I Can Answer Next Time</span>'
+         +   '<div class="chip-row">' + chips + '</div>'
+         + '</div>';
+  }
+
+  function rememberedHTML(result) {
+    var ingested = result.ingested || {};
+    var lines = outcomeRows(ingested).map(function (row) {
+      return '<li><span class="tag tag-' + row.kind + '">' + esc(titleCase(row.label))
+           + '</span> ' + esc(row.text) + '</li>';
+    }).join("");
+    if (!lines) { return ""; }
+    return '<div class="citations remembered">'
+         +   '<span class="cite-head">Recorded</span><ul>' + lines + '</ul>'
+         + '</div>';
+  }
+
+  async function askKivi(spokenText) {
+    var input = $("query-input");
+    var query = (spokenText || input.value).trim();
+    if (!query) { return; }
+
+    show($("query-error"), false);
+    rememberTurn("user", query);
+    appendMessage('<div class="msg msg-user">' + esc(query) + '</div>');
+    if (!spokenText) { input.value = ""; }
+    show($("query-status"), true);
+    $("query-submit").disabled = true;
+
+    try {
+      var result = await postJSON("/api/hey-kivi", {
+        query: query,
+        history: conversation.slice(0, -1)
+      });
+      rememberTurn("kivi", result.answer);
+      var remembering = result.mode === "remember";
+      var declined = result.decision === "declined_unknown";
+      var meta = [];
+      if (typeof result.retrieval_score === "number") {
+        meta.push("top match " + result.retrieval_score.toFixed(3));
+      }
+      if (typeof result.total_latency_ms === "number") {
+        meta.push(result.total_latency_ms + "ms");
+      }
+      var body = "";
+      if (remembering) {
+        body = rememberedHTML(result);
+      } else {
+        body = sourceBadgeHTML(result.answer_source)
+             + citationsHTML(result.cited_memories)
+             + webSourcesHTML(result.web_sources)
+             + followUpsHTML(result.follow_ups);
+      }
+      appendMessage(
+        '<div class="msg msg-kivi' + (declined ? " declined" : "")
+        + (remembering ? " remembered" : "") + '">'
+        + '<p class="answer">' + esc(result.answer) + '</p>'
+        + body
+        + (meta.length ? '<div class="score">'
+            + meta.map(esc).join(" &middot; ") + '</div>' : "")
+        + '</div>'
+      );
+    } catch (err) {
+      showError($("query-error"), "Could not reach Kivi: " + err.message);
+    } finally {
+      show($("query-status"), false);
+      $("query-submit").disabled = false;
+    }
+  }
+
+  // A follow-up chip puts the question in the box rather than sending it:
+  // Kivi asked it, the answer is the user's to give or skip.
+  $("chat").addEventListener("click", function (event) {
+    var chip = event.target.closest("[data-followup]");
+    if (!chip) { return; }
+    var input = $("query-input");
+    input.value = chip.dataset.followup + " ";
+    input.focus();
+  });
+
+  $("query-submit").addEventListener("click", function () { askKivi(); });
+  $("query-input").addEventListener("keydown", function (event) {
+    if (event.key === "Enter") { askKivi(); }
+  });
+
+  // Speaking in Hey Kivi transcribes, then routes like any other input. The
+  // audio endpoint also ingests, so a spoken statement is already recorded.
+  var askRecorder = createRecorder({
+    onError: function (message) { showError($("query-error"), message); },
+    onStateChange: function (isRecording) {
+      $("ask-record-toggle").classList.toggle("recording", isRecording);
+      $("ask-record-label").textContent = isRecording ? "Stop" : "Speak";
+    },
+    onComplete: async function (blob) {
+      show($("query-error"), false);
+      $("query-status").textContent = "Transcribing…";
+      show($("query-status"), true);
+      try {
+        var form = new FormData();
+        form.append("audio", blob, "dictation.webm");
+        var transcribed = await api("/api/transcribe", { method: "POST", body: form });
+        $("query-input").value = transcribed.transcript;
+      } catch (err) {
+        showError($("query-error"), "Could not transcribe: " + err.message);
+      } finally {
+        $("query-status").textContent = "Searching memory…";
+        show($("query-status"), false);
+      }
+    }
+  });
+  $("ask-record-toggle").addEventListener("click", function () { askRecorder.toggle(); });
+
+  // -------------------------------------------------------- memory view
+  var TAG_ORDER = ["fact", "episode", "preference"];
+  var TAG_TITLES = { fact: "Facts", episode: "Episodes", preference: "Preferences" };
+
+  function memoryCardHTML(memory) {
+    return '<div class="memory-card" data-id="' + memory.id + '">'
+         +   '<p class="memory-content">' + esc(memory.content) + '</p>'
+         +   '<div class="memory-meta">'
+         +     '<span>Learned ' + esc(fmtTime(memory.created_at)) + '</span>'
+         +     '<button class="source-link" data-action="source">From Take #'
+         +       memory.source_take_id + '</button>'
+         +     (memory.usage_count ? '<span>Used ' + memory.usage_count + '&times;</span>' : "")
+         +     (memory.user_edited ? '<span class="edited-note">Edited</span>' : "")
+         +     '<span class="memory-actions">'
+         +       '<button class="btn-ghost" data-action="edit">Edit</button>'
+         +       '<button class="btn-ghost danger" data-action="delete">Delete</button>'
+         +     '</span>'
+         +   '</div>'
+         +   '<div class="source-take" data-role="source" hidden>'
+         +     '<span class="src-label">Source Take &middot; ' + esc(fmtTime(memory.source_take_created_at)) + '</span>'
+         +     esc(memory.source_take_raw_text)
+         +   '</div>'
+         +   '<div class="edit-box" data-role="edit" hidden>'
+         +     '<textarea rows="3">' + esc(memory.content) + '</textarea>'
+         +     '<div class="form-row">'
+         +       '<button class="btn" data-action="save-edit">Save</button>'
+         +       '<button class="btn-ghost" data-action="cancel-edit">Cancel</button>'
+         +     '</div>'
+         +   '</div>'
+         + '</div>';
+  }
+
+  function renderMemories(memories) {
+    var host = $("memory-list");
+    if (!memories.length) {
+      host.innerHTML = '<p class="empty">No memories yet. Record a few takes first.</p>';
+      return;
+    }
+    host.innerHTML = TAG_ORDER.map(function (tag) {
+      var group = memories.filter(function (memory) { return memory.tag === tag; });
+      if (!group.length) { return ""; }
+      return '<div class="tag-group">'
+           +   '<h2>' + TAG_TITLES[tag] + ' <span class="count">' + group.length + '</span></h2>'
+           +   group.map(memoryCardHTML).join("")
+           + '</div>';
+    }).join("");
+  }
+
+  async function loadMemories() {
+    show($("memory-error"), false);
+    $("memory-list").innerHTML = '<p class="loading">Loading&hellip;</p>';
+    try {
+      var data = await api("/api/memories");
+      renderMemories(data.memories || []);
+    } catch (err) {
+      $("memory-list").innerHTML = "";
+      showError($("memory-error"), "Could not load memories: " + err.message);
+    }
+  }
+
+  // ---------------------------------------------------------- apps view
+  var APP_ACTIONS = {
+    google: { path: "/api/integrations/google/sync",   label: "Learn From Sent Mail", body: { limit: 5 } },
+    notion: { path: "/api/integrations/notion/export", label: "Export Memory" },
+    slack:  { path: "/api/integrations/slack/digest",  label: "Send Digest" }
+  };
+
+  // The consent screen opens in a popup; it messages back and closes itself.
+  function connect(providerKey) {
+    var popup = window.open(
+      "/api/auth/" + providerKey + "/start", "kivi-auth",
+      "width=560,height=700,menubar=no,toolbar=no"
+    );
+    if (!popup) {
+      showError($("apps-error"), "Allow popups for this site to connect an account.");
+    }
+  }
+
+  window.addEventListener("message", function (event) {
+    if (event.data === "kivi-auth-changed") { loadIntegrations(); }
+  });
+
+  function integrationCardHTML(app) {
+    var action = APP_ACTIONS[app.key];
+    var controls;
+
+    if (!app.registered) {
+      controls = '<a class="btn-ghost" href="' + esc(app.setup_url)
+               + '" target="_blank" rel="noopener noreferrer">Register App</a>';
+    } else if (app.connected) {
+      controls = '<button class="btn-ghost" data-app="' + esc(app.key) + '">'
+               + esc(action.label) + '</button>'
+               + ' <button class="btn-ghost danger" data-disconnect="' + esc(app.key)
+               + '">Disconnect</button>';
+    } else {
+      controls = '<button class="btn-ghost accent" data-connect="' + esc(app.key) + '">Connect '
+               + esc(app.name) + '</button>';
+    }
+
+    var note = "";
+    if (!app.registered) {
+      note = '<div class="app-missing">Add <code>' + app.needs_env.map(esc).join("</code> and <code>")
+           + '</code> to .env, with redirect URI <code>' + esc(app.redirect_uri) + '</code></div>';
+    } else if (app.connected && app.account_label) {
+      note = '<div class="app-missing">Connected as ' + esc(app.account_label) + '</div>';
+    }
+
+    return '<div class="memory-card">'
+         +   '<p class="memory-content">' + esc(app.name)
+         +     ' <span class="tag ' + (app.connected ? "tag-saved" : "tag-dropped") + '">'
+         +       (app.connected ? "Connected" : app.registered ? "Not Connected" : "Not Registered")
+         +     '</span>'
+         +     ' <span class="tag ' + (app.direction === "read" ? "tag-episode" : "tag-preference") + '">'
+         +       titleCase(app.direction) + '</span></p>'
+         +   '<div class="memory-meta"><span>' + esc(app.summary) + '</span>'
+         +     '<span class="memory-actions">' + controls + '</span></div>'
+         +   note
+         +   '<div class="app-result" data-result="' + esc(app.key) + '" hidden></div>'
+         + '</div>';
+  }
+
+  async function loadIntegrations() {
+    show($("apps-error"), false);
+    $("apps-list").innerHTML = '<p class="loading">Loading&hellip;</p>';
+    try {
+      var data = await api("/api/integrations");
+      $("apps-list").innerHTML = (data.integrations || []).map(integrationCardHTML).join("");
+    } catch (err) {
+      $("apps-list").innerHTML = "";
+      showError($("apps-error"), "Could not load connections: " + err.message);
+    }
+  }
+
+  $("apps-list").addEventListener("click", async function (event) {
+    var connectBtn = event.target.closest("[data-connect]");
+    if (connectBtn) { connect(connectBtn.dataset.connect); return; }
+
+    var disconnectBtn = event.target.closest("[data-disconnect]");
+    if (disconnectBtn) {
+      var key = disconnectBtn.dataset.disconnect;
+      if (!window.confirm("Disconnect " + key + "? Kivi will lose access until you reconnect.")) {
+        return;
+      }
+      disconnectBtn.disabled = true;
+      try {
+        await api("/api/auth/" + key + "/disconnect", { method: "POST" });
+        await loadIntegrations();
+      } catch (err) {
+        showError($("apps-error"), "Could not disconnect: " + err.message);
+        disconnectBtn.disabled = false;
+      }
+      return;
+    }
+
+    var button = event.target.closest("[data-app]");
+    if (!button) { return; }
+    var key = button.dataset.app;
+    var action = APP_ACTIONS[key];
+    var panel = document.querySelector('[data-result="' + key + '"]');
+
+    button.disabled = true;
+    panel.hidden = false;
+    panel.textContent = "Working…";
+    try {
+      var result = await api(action.path, action.body ? {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(action.body)
+      } : { method: "POST" });
+
+      if (key === "google") {
+        var learned = (result.results || []).filter(function (r) { return r.saved.length; });
+        panel.textContent = "Scanned " + result.scanned + " sent emails. "
+          + (learned.length ? "Learned: " + learned.map(function (r) {
+              return r.saved.join("; ");
+            }).join(" | ") : "Nothing new worth keeping.");
+      } else {
+        panel.textContent = "Done.";
+      }
+      if (key === "google") { loadMemories(); }
+    } catch (err) {
+      panel.textContent = "Failed: " + err.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  $("memory-list").addEventListener("click", async function (event) {
+    var button = event.target.closest("[data-action]");
+    if (!button) { return; }
+    var card = button.closest(".memory-card");
+    var id = card.dataset.id;
+    var action = button.dataset.action;
+
+    if (action === "source") {
+      var panel = card.querySelector('[data-role="source"]');
+      panel.hidden = !panel.hidden;
+      return;
+    }
+    if (action === "edit") {
+      card.querySelector('[data-role="edit"]').hidden = false;
+      return;
+    }
+    if (action === "cancel-edit") {
+      card.querySelector('[data-role="edit"]').hidden = true;
+      return;
+    }
+    if (action === "save-edit") {
+      var value = card.querySelector('[data-role="edit"] textarea').value.trim();
+      if (!value) { return; }
+      button.disabled = true;
+      try {
+        await api("/api/memories/" + id, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: value })
+        });
+        await loadMemories();
+      } catch (err) {
+        showError($("memory-error"), "Could not save edit: " + err.message);
+        button.disabled = false;
+      }
+      return;
+    }
+    if (action === "delete") {
+      if (!window.confirm("Delete this memory? It moves to the archive, not gone for good.")) {
+        return;
+      }
+      button.disabled = true;
+      try {
+        await api("/api/memories/" + id, { method: "DELETE" });
+        await loadMemories();
+      } catch (err) {
+        showError($("memory-error"), "Could not delete: " + err.message);
+        button.disabled = false;
+      }
+    }
+  });
+})();
+</script>
+</body>
+</html>

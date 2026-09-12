@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: kivi
+    runtime: docker
+    plan: starter          # free tier OOMs on torch; starter has 512MB+ and disks
+    healthCheckPath: /api/health
+    disk:
+      name: kivi-data
+      mountPath: /data     # SQLite must live on a persistent disk
+      sizeGB: 1
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false        # set in dashboard, never in git
+      - key: DATABASE_PATH
+        value: /data/kivi.db

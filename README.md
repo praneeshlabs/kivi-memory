@@ -1,12 +1,12 @@
-# Kivi — semantic memory for a voice dictation app
+# Kivi - semantic memory for a voice dictation app
 
 Kivi listens to what you say, decides what is worth remembering, and answers
-questions from what it kept — with a citation for every claim, or an honest
+questions from what it kept - with a citation for every claim, or an honest
 "I don't know".
 
 Built on the **Sarvam** stack (Sarvam chat, Saaras ASR, Bulbul TTS) so it works
 in Indian languages and code-mixed speech, not just English, with Groq as a
-fallback. Which one is actually serving is reported, never assumed — see
+fallback. Which one is actually serving is reported, never assumed - see
 [Before any demo](#before-any-demo).
 
 ---
@@ -17,7 +17,7 @@ Most "memory" systems detect a contradiction by similarity: if a new fact is
 very close to an old one, treat it as a replacement. **That is backwards.**
 
 Two facts contradict each other precisely when they fill the *same slot* with
-*different values* — and different values push cosine similarity **down**.
+*different values* - and different values push cosine similarity **down**.
 Measured on real data:
 
 | Pair | Cosine | What it actually is |
@@ -26,7 +26,7 @@ Measured on real data:
 | "works at Google" vs "has a cat named Pixel" | **0.357** | completely unrelated |
 
 The real contradiction scores *lower* than the unrelated pair. The
-distributions overlap, so **no similarity threshold can separate them** — a
+distributions overlap, so **no similarity threshold can separate them** - a
 0.95 cutoff catches only verbatim restatements, which are duplicates, not
 contradictions.
 
@@ -111,7 +111,7 @@ python -m pytest tests/ -q      # 47 passing
 
 The LLM is stubbed, so the tests pin **pipeline behaviour** rather than model
 output. Every case is a bug that actually shipped during development and was
-caught by a screenshot — contradiction archiving, refinement, duplicate
+caught by a screenshot - contradiction archiving, refinement, duplicate
 reinforcement, the empty-extraction ledger entry, U+202F normalisation,
 solicited answers, bidirectional links, BM25 injection safety.
 
@@ -138,7 +138,7 @@ there is no Indic ASR and no speech output.
 
 ## Before any demo
 
-Presence of an API key proves nothing — a key with no credits authenticates
+Presence of an API key proves nothing - a key with no credits authenticates
 fine and fails every request. Check what is actually serving:
 
 ```bash
@@ -153,7 +153,7 @@ rather than quietly answer on Groq.
 
 - **Single user.** Signing in with Google identifies the owner and gates
   connections; memories are not scoped per user. Multi-tenancy means a
-  `user_id` on every table — a real change, not a flag.
+  `user_id` on every table - a real change, not a flag.
 - **OAuth is untested against live accounts.** The flows follow each
   provider's documented spec; first connection may surface a redirect-URI
   mismatch.

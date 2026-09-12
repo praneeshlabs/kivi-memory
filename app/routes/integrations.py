@@ -73,3 +73,11 @@ def gmail_sync(payload: GmailSyncRequest) -> dict[str, Any]:
             "dropped": len(outcome.get("dropped", [])),
         })
     return {"scanned": len(messages), "results": results}
+
+
+@router.get("/preflight")
+def provider_preflight() -> dict[str, Any]:
+    """Live check of whether Sarvam is actually serving. Run before a demo."""
+    from app.services.llm_client import preflight
+
+    return preflight()

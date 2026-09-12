@@ -17,6 +17,7 @@ from app.services.llm_client import (
     SARVAM_STT_URL,
     get_groq_client,
     groq_key,
+    _note_sarvam_error,
     http,
     sarvam_key,
 )
@@ -40,9 +41,12 @@ def _transcribe_sarvam(filename: str, audio_bytes: bytes) -> Optional[tuple[str,
             files={"file": (filename, audio_bytes, "audio/webm")},
             data={"model": SARVAM_STT_MODEL, "language_code": DEFAULT_LANGUAGE_CODE},
         )
-        response.raise_for_status()
+        if response.status_code >= 400:
+            _note_sarvam_error(f"HTTP {response.status_code}: {response.text[:200]}")
+            return None
         payload = response.json()
-    except Exception:
+    except Exception as exc:
+        _note_sarvam_error(f"{type(exc).__name__}: {exc}")
         return None
 
     transcript = (payload.get("transcript") or "").strip()

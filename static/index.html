@@ -49,6 +49,12 @@
 
       <div class="chat" id="chat"></div>
 
+      <div class="answering-bar" id="answering-bar" hidden>
+        <span class="answering-label">Answering</span>
+        <span id="answering-text"></span>
+        <button class="answering-cancel" id="answering-cancel" title="Cancel">&times;</button>
+      </div>
+
       <div class="ask-row">
         <input type="text" id="query-input" placeholder="Where am I working now?">
         <button class="btn-record" id="ask-record-toggle" title="Speak instead of typing">
@@ -329,15 +335,20 @@
     $("chat").lastElementChild.scrollIntoView({ block: "nearest" });
   }
 
+  // Citations are references, not a second copy of the answer. Reprinting the
+  // full memory text made every reply twice as long and, when several near
+  // duplicate memories matched, mostly repeated itself. One chip per take,
+  // full text on hover, click to open it in Memory.
   function citationsHTML(cited) {
     if (!cited || !cited.length) { return ""; }
-    var items = cited.map(function (memory) {
-      return '<li>' + esc(memory.content)
-           + ' <span class="cite-time">&mdash; Take #' + memory.source_take_id
-           + ', ' + esc(fmtTime(memory.source_take_created_at)) + '</span></li>';
+    var chips = cited.map(function (memory) {
+      return '<button class="cite-chip" data-memory-id="' + memory.id + '"'
+           + ' title="' + esc(memory.content) + '">Take #' + memory.source_take_id
+           + '</button>';
     }).join("");
-    return '<div class="citations">'
-         +   '<span class="cite-head">Based On</span><ul>' + items + '</ul>'
+    return '<div class="citations compact">'
+         +   '<span class="cite-head">Based On</span>'
+         +   '<span class="cite-chips">' + chips + '</span>'
          + '</div>';
   }
 
@@ -393,6 +404,10 @@
     var query = (spokenText || input.value).trim();
     if (!query) { return; }
 
+    // Capture and clear before the await, so a second send can't reuse it.
+    var answeringNow = pendingQuestion;
+    setPendingQuestion(null);
+
     show($("query-error"), false);
     rememberTurn("user", query);
     appendMessage('<div class="msg msg-user">' + esc(query) + '</div>');
@@ -403,7 +418,8 @@
     try {
       var result = await postJSON("/api/hey-kivi", {
         query: query,
-        history: conversation.slice(0, -1)
+        history: conversation.slice(0, -1),
+        answering: answeringNow
       });
       rememberTurn("kivi", result.answer);
       var remembering = result.mode === "remember";
@@ -441,14 +457,40 @@
     }
   }
 
-  // A follow-up chip puts the question in the box rather than sending it:
-  // Kivi asked it, the answer is the user's to give or skip.
+  // Clicking a follow-up ARMS AN ANSWER. Pasting the question into the input
+  // would mean the next Send re-asks Kivi the very question it just asked —
+  // it would search memory, find nothing, and decline again forever.
+  var pendingQuestion = null;
+
+  function setPendingQuestion(question) {
+    pendingQuestion = question;
+    if (question) {
+      $("answering-text").textContent = question;
+      show($("answering-bar"), true);
+      $("query-input").placeholder = "Type your answer…";
+    } else {
+      show($("answering-bar"), false);
+      $("query-input").placeholder = "Where am I working now?";
+    }
+  }
+
   $("chat").addEventListener("click", function (event) {
+    var cite = event.target.closest("[data-memory-id]");
+    if (cite) {
+      openMemory(cite.dataset.memoryId);
+      return;
+    }
+
     var chip = event.target.closest("[data-followup]");
     if (!chip) { return; }
-    var input = $("query-input");
-    input.value = chip.dataset.followup + " ";
-    input.focus();
+    setPendingQuestion(chip.dataset.followup);
+    $("query-input").value = "";
+    $("query-input").focus();
+  });
+
+  $("answering-cancel").addEventListener("click", function () {
+    setPendingQuestion(null);
+    $("query-input").focus();
   });
 
   $("query-submit").addEventListener("click", function () { askKivi(); });
@@ -529,6 +571,17 @@
            +   group.map(memoryCardHTML).join("")
            + '</div>';
     }).join("");
+  }
+
+  // Jump to a specific memory from a citation.
+  async function openMemory(memoryId) {
+    document.querySelector('.nav-item[data-view="memory"]').click();
+    await loadMemories();
+    var card = $("memory-list").querySelector('.memory-card[data-id="' + memoryId + '"]');
+    if (!card) { return; }
+    card.scrollIntoView({ block: "center", behavior: "smooth" });
+    card.classList.add("highlight");
+    setTimeout(function () { card.classList.remove("highlight"); }, 2000);
   }
 
   async function loadMemories() {

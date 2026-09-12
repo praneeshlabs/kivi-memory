@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from app.db import get_connection
-from app.services import cache, fast_paths, tts, web_search as _ws
+from app.services import cache, fast_paths, persona, tts, web_search as _ws
 from app.services.llm_client import chat_json, provider_status
 from app.services.memory_pipeline import process_take
 from app.services.retrieval import cache_size, embed, hybrid_search
@@ -66,8 +66,21 @@ Worked examples:
 
 Never leave a bare "she", "he", "they", "it", or "that" in resolved_query, and never replace one with a vague stand-in like "the person" — name the actual subject. If the message already stands alone, repeat it unchanged.
 
+reaction: what Kivi says out loud in response. Only matters for a statement or
+a request — react to WHAT THEY SAID, not to the act of storing it. The
+interface separately shows what was saved, so never describe the saving.
+
 Return strict JSON:
-{"intent": "question" | "statement" | "request", "scope": "personal" | "general" | "mixed", "needs_live_data": true | false, "resolved_query": "..."}"""
+{"intent": "question" | "statement" | "request", "scope": "personal" | "general" | "mixed", "needs_live_data": true | false, "resolved_query": "...", "reaction": "..."}"""
+
+
+def _router_prompt() -> str:
+    """Router instructions plus the current voice, so the reaction it drafts
+    already sounds like Kivi rather than like a form."""
+    return (
+        f"{ROUTER_SYSTEM_PROMPT}\n\n"
+        f"--- How your reaction should sound ---\n{persona.voice()}"
+    )
 
 MEMORY_ANSWER_PROMPT = """Answer using ONLY the memories provided. Do not add information not present in these memories. If they don't fully answer the question, say what you don't know.
 
@@ -211,8 +224,11 @@ def route_input(text: str, transcript: str = "") -> dict[str, Any]:
     than as a bag of pronouns that matches nothing.
     """
     payload = _chat_json(
-        FAST, ROUTER_SYSTEM_PROMPT,
-        _with_history(transcript, text), temperature=0.0,
+        FAST, _router_prompt(),
+        _with_history(transcript, text),
+        # A flat zero makes the reaction wooden and repetitive; the routing
+        # fields are constrained enough that a little warmth costs nothing.
+        temperature=0.3,
     )
     intent = str(payload.get("intent", "")).lower()
     scope = str(payload.get("scope", "")).lower()
@@ -224,6 +240,7 @@ def route_input(text: str, transcript: str = "") -> dict[str, Any]:
         "scope": scope if scope in ("personal", "general", "mixed") else "personal",
         "needs_live_data": bool(payload.get("needs_live_data", False)),
         "resolved_query": resolved or text,
+        "reaction": (normalize_text(str(payload.get("reaction", "") or "")) or "").strip(),
     }
 
 
@@ -262,11 +279,15 @@ def _validated_ids(raw: Any, offered: set[int]) -> list[int]:
 
 # ------------------------------------------------------------- answer sources
 
+def _styled(prompt: str) -> str:
+    return f"{prompt}\n\nTone: {persona.answer_style()}"
+
+
 def answer_from_memory(
     query: str, candidates: list[dict[str, Any]], transcript: str = ""
 ) -> tuple[str, list[int], Optional[str], Optional[int]]:
     payload = _chat_json(
-        MAIN, MEMORY_ANSWER_PROMPT,
+        MAIN, _styled(MEMORY_ANSWER_PROMPT),
         _with_history(transcript,
                       f"{query}\n\nMemories:\n{_memory_context(candidates)}", "Question"),
     )
@@ -281,7 +302,7 @@ def answer_mixed(
     query: str, candidates: list[dict[str, Any]], transcript: str = ""
 ) -> tuple[str, list[int], Optional[int]]:
     payload = _chat_json(
-        MAIN, MIXED_ANSWER_PROMPT,
+        MAIN, _styled(MIXED_ANSWER_PROMPT),
         _with_history(transcript,
                       f"{query}\n\nWhat Kivi remembers:\n{_memory_context(candidates)}", "Question"),
     )
@@ -551,7 +572,9 @@ def last_kivi_question(history: Optional[list[dict[str, Any]]]) -> Optional[str]
     return None
 
 
-def remember_statement(text: str, answering: Optional[str] = None) -> dict[str, Any]:
+def remember_statement(
+    text: str, answering: Optional[str] = None, reaction: str = ""
+) -> dict[str, Any]:
     """The user stated something rather than asking: run it through ingestion."""
     started = time.perf_counter()
     result = process_take(text, answering_question=answering)
@@ -559,6 +582,23 @@ def remember_statement(text: str, answering: Optional[str] = None) -> dict[str, 
     saved = result.get("saved", [])
     watched = result.get("watched", [])
     dropped = result.get("dropped", [])
+
+    # What Kivi says is the reaction to what they told it. The outcome of
+    # storing it is shown separately in the interface, so it does not need
+    # narrating twice.
+    if reaction and persona.is_expressive() and (saved or watched):
+        return {
+            "mode": "remember",
+            "answer": reaction,
+            "decision": None,
+            "answer_source": None,
+            "cited_memories": [],
+            "web_sources": [],
+            "follow_ups": [],
+            "retrieval_score": None,
+            "ingested": result,
+            "total_latency_ms": int((time.perf_counter() - started) * 1000),
+        }
 
     superseded = [mid for item in saved for mid in item.get("superseded_memory_ids") or []]
     if superseded:
@@ -604,17 +644,21 @@ def _trivial_reply(kind: str, answer: str, started: float) -> dict[str, Any]:
 
 
 def process_hey_kivi(
-    raw_query: str, history: Optional[list[dict[str, Any]]] = None
+    raw_query: str,
+    history: Optional[list[dict[str, Any]]] = None,
+    answering: Optional[str] = None,
 ) -> dict[str, Any]:
     """Route one Hey Kivi input to recall, general knowledge, or remembering."""
     started = time.perf_counter()
     text = normalize_text(raw_query)
 
     # "ok", "thanks", "hi" need no model. This is a large share of real chat
-    # traffic and used to cost two inferences apiece.
-    trivial = fast_paths.check(text)
-    if trivial is not None:
-        return _trivial_reply(trivial["kind"], trivial["answer"], started)
+    # traffic and used to cost two inferences apiece. An answer to a question
+    # Kivi asked is never trivial, though — "Meera" is a real fact.
+    if not answering:
+        trivial = fast_paths.check(text)
+        if trivial is not None:
+            return _trivial_reply(trivial["kind"], trivial["answer"], started)
 
     transcript = format_history(history)
 
@@ -626,6 +670,15 @@ def process_hey_kivi(
         route_future = pool.submit(route_input, text, transcript)
         pool.submit(_prewarm_embedding, text)
         route = route_future.result()
+
+    # The user explicitly answered a question Kivi asked. Do not let the router
+    # decide the intent: a bare "Meera" or "grey" reads as a question in
+    # isolation, which would search memory, find nothing, and ask again.
+    if answering:
+        return remember_statement(
+            route.get("resolved_query") or text, answering=answering,
+            reaction=route.get("reaction", ""),
+        )
 
     if route["intent"] == "request":
         # Kivi has no hands. Be straight about that, but still learn from what
@@ -651,5 +704,6 @@ def process_hey_kivi(
         return remember_statement(
             route.get("resolved_query") or text,
             answering=last_kivi_question(history),
+            reaction=route.get("reaction", ""),
         )
     return answer_question(text, route, transcript)

@@ -17,14 +17,18 @@ from typing import Any, Callable, Optional
 
 import httpx
 
-SARVAM_CHAT_URL = "https://api.sarvam.ai/v2/chat/completions"
+# v2 is gated behind a closed beta ("endpoint is currently in beta"); v1 is the
+# generally available one. Verified against a live key.
+SARVAM_CHAT_URL = "https://api.sarvam.ai/v1/chat/completions"
 SARVAM_STT_URL = "https://api.sarvam.ai/speech-to-text"
 SARVAM_TTS_URL = "https://api.sarvam.ai/text-to-speech"
 
-# Sarvam-M (24B) was retired from the chat API; 30B is its documented
-# successor and is plenty for classification and short answers.
-SARVAM_MODEL = os.getenv("SARVAM_MODEL", "sarvam-30b")
-SARVAM_FAST_MODEL = os.getenv("SARVAM_FAST_MODEL", "sarvam-30b")
+# Sarvam-M was retired and sarvam-30b is not exposed on v1. The API itself
+# reports the live set: sarvam-105b and sarvam-105b-conversations. The
+# conversations variant is documented for real-time/voice workloads, which is
+# exactly what the router and conflict checks are.
+SARVAM_MODEL = os.getenv("SARVAM_MODEL", "sarvam-105b")
+SARVAM_FAST_MODEL = os.getenv("SARVAM_FAST_MODEL", "sarvam-105b-conversations")
 # Saarika was folded into the Saaras line on the /speech-to-text endpoint.
 SARVAM_STT_MODEL = os.getenv("SARVAM_STT_MODEL", "saaras:v4")
 SARVAM_TTS_MODEL = os.getenv("SARVAM_TTS_MODEL", "bulbul:v3")
@@ -38,6 +42,19 @@ HTTP_TIMEOUT = 45.0
 
 _groq_client = None
 _http: Optional[httpx.Client] = None
+
+# A fallback that hides the reason is worse than no fallback: the app keeps
+# working while the stack you meant to run is quietly unused.
+_last_sarvam_error: Optional[str] = None
+
+
+def last_sarvam_error() -> Optional[str]:
+    return _last_sarvam_error
+
+
+def _note_sarvam_error(message: str) -> None:
+    global _last_sarvam_error
+    _last_sarvam_error = message[:300]
 
 
 def sarvam_key() -> Optional[str]:
@@ -121,9 +138,12 @@ def _sarvam_chat(model: str, system: str, user: str, temperature: float) -> Opti
                 "response_format": {"type": "json_object"},
             },
         )
-        response.raise_for_status()
+        if response.status_code >= 400:
+            _note_sarvam_error(f"HTTP {response.status_code}: {response.text[:200]}")
+            return None
         payload = response.json()
-    except Exception:
+    except Exception as exc:
+        _note_sarvam_error(f"{type(exc).__name__}: {exc}")
         return None
 
     try:
@@ -191,18 +211,55 @@ def chat_json(system: str, user: str, temperature: float = 0.2, fast: bool = Fal
 
 
 def active_provider() -> str:
-    if sarvam_key():
+    """Which provider is actually serving, not merely which key is present.
+
+    Reporting "sarvam" just because a key exists is how a dead Sarvam path
+    stayed invisible behind a working Groq fallback.
+    """
+    if sarvam_key() and _last_sarvam_error is None:
         return "sarvam"
-    return "groq" if groq_key() else "none"
+    if groq_key():
+        return "groq (sarvam fallback)" if sarvam_key() else "groq"
+    return "none"
+
+
+def preflight() -> dict[str, Any]:
+    """Actually call Sarvam once and report what happens.
+
+    Presence of a key proves nothing — a key with no credits authenticates
+    fine and fails every request. This is the check to run before a demo.
+    """
+    if not sarvam_key():
+        return {"ok": False, "reason": "SARVAM_API_KEY is not set", "detail": None}
+
+    result = _sarvam_chat(SARVAM_MODEL, "Reply with JSON.", 'Return {"ok": true}', 0.0)
+    if result is not None:
+        return {"ok": True, "reason": f"{SARVAM_MODEL} responded", "detail": None}
+    return {
+        "ok": False,
+        "reason": "Sarvam is configured but not serving; Groq is answering instead",
+        "detail": last_sarvam_error(),
+    }
+
+
+def require_sarvam() -> bool:
+    """KIVI_REQUIRE_SARVAM=true refuses to start on the fallback.
+
+    Existing to stop exactly one failure: demoing an Indic-stack project while
+    every request is silently served by a US model because billing lapsed.
+    """
+    return os.getenv("KIVI_REQUIRE_SARVAM", "").strip().lower() in ("1", "true", "yes")
 
 
 def provider_status() -> dict[str, Any]:
     return {
         "active": active_provider(),
+        "sarvam_last_error": last_sarvam_error(),
         "sarvam_configured": bool(sarvam_key()),
         "groq_configured": bool(groq_key()),
+        "sarvam_healthy": bool(sarvam_key()) and _last_sarvam_error is None,
         "chat_model": SARVAM_MODEL if sarvam_key() else GROQ_MODEL,
         "stt_model": SARVAM_STT_MODEL if sarvam_key() else GROQ_TRANSCRIBE_MODEL,
         "tts_model": SARVAM_TTS_MODEL if sarvam_key() else None,
-        "tts_available": bool(sarvam_key()),
+        "tts_available": bool(sarvam_key()) and _last_sarvam_error is None,
     }

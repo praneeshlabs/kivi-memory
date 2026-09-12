@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.db import get_connection
+from app.services.consolidate import consolidate
 from app.services.memory_store import delete_memory, update_memory_content
 
 router = APIRouter(prefix="/api", tags=["memories"])
@@ -68,3 +69,14 @@ def patch_memory_endpoint(memory_id: int, payload: MemoryPatch):
         raise
     finally:
         conn.close()
+
+
+@router.post("/memories/consolidate")
+def consolidate_memories(dry_run: bool = False) -> dict:
+    """Collapse memories that restate one another.
+
+    Ingestion judges redundancy against what existed at that moment, so
+    restatements arriving over days can each look novel. This is the sweep.
+    Pass ?dry_run=true to see what it would do without changing anything.
+    """
+    return consolidate(dry_run=dry_run)

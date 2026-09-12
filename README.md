@@ -104,7 +104,7 @@ below that it is not worth the dependency.
 ## Tests
 
 ```bash
-python -m pytest tests/ -q      # 33 passing
+python -m pytest tests/ -q      # 47 passing
 ```
 
 The LLM is stubbed, so the tests pin **pipeline behaviour** rather than model
@@ -134,6 +134,19 @@ there is no Indic ASR and no speech output.
 
 ---
 
+## Before any demo
+
+Presence of an API key proves nothing — a key with no credits authenticates
+fine and fails every request. Check what is actually serving:
+
+```bash
+curl -s http://127.0.0.1:8000/api/integrations/preflight
+```
+
+The server also prints a loud banner at startup when Sarvam is configured but
+not serving, and `KIVI_REQUIRE_SARVAM=true` makes it refuse to start at all
+rather than quietly answer on Groq.
+
 ## Honest limitations
 
 - **Single user.** Signing in with Google identifies the owner and gates
@@ -147,3 +160,6 @@ there is no Indic ASR and no speech output.
   wants a purpose-built API.
 - **Retrieval is exact-ish, not semantic-perfect.** Citation gating is what
   makes a weak retrieval safe rather than confidently wrong.
+- **No offline eval set yet.** Behaviour is pinned by 47 tests, but there is
+  no labelled corpus reporting filter precision/recall or retrieval hit@k.
+  That is the next thing worth building.

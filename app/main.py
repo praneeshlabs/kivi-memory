@@ -9,10 +9,39 @@ from fastapi.staticfiles import StaticFiles
 from app.db import get_connection, init_db
 from app.routes import auth, hey_kivi, integrations, memories, takes
 from app.services import cache as cache_service
-from app.services.llm_client import provider_status
+from app.services.llm_client import preflight, provider_status, require_sarvam
 from app.services.retrieval import EMBEDDING_MODEL_NAME, cache_size, warm_up
 
 load_dotenv()
+
+
+def _check_sarvam() -> None:
+    """Say loudly, at startup, which stack is actually going to serve."""
+    status = preflight()
+    if status["ok"]:
+        print(f"[kivi] Sarvam OK - {status['reason']}")
+        return
+
+    rule = "=" * 72
+    lines = [
+        "",
+        rule,
+        f"[kivi] SARVAM NOT SERVING: {status['reason']}",
+    ]
+    if status["detail"]:
+        lines.append(f"       {status['detail']}")
+    lines += [
+        "       Requests will be answered by Groq (non-Indic models).",
+        "       Speech-to-text and spoken replies are unavailable.",
+        rule,
+        "",
+    ]
+    print("\n".join(lines))
+    if require_sarvam():
+        raise RuntimeError(
+            "KIVI_REQUIRE_SARVAM is set and Sarvam is not serving. "
+            f"{status['reason']}: {status['detail']}"
+        )
 
 
 def _build_search_index() -> None:
@@ -46,6 +75,7 @@ async def lifespan(app: FastAPI):
     _build_search_index()
     # Load the embedding model now so the first real request doesn't pay for it.
     warm_up()
+    _check_sarvam()
     yield
 
 

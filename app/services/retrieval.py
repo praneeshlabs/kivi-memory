@@ -68,6 +68,18 @@ def embed(text: str) -> np.ndarray:
     return np.asarray(vector, dtype=np.float32)
 
 
+def cached_embed_safe(text: str) -> np.ndarray:
+    """embed() behind the shared cache, importable without a circular import."""
+    from app.services import cache
+
+    hit = cache.get_embedding(text)
+    if hit is not None:
+        return hit
+    vector = embed(text)
+    cache.put_embedding(text, vector)
+    return vector
+
+
 def embed_batch(texts: list[str]) -> np.ndarray:
     """One forward pass for many texts — far cheaper than a loop."""
     if not texts:

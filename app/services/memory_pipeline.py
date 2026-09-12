@@ -157,15 +157,32 @@ CONFLICT_SYSTEM_PROMPT = """You maintain a personal memory store about one user.
 
 - "supersedes": both describe the SAME attribute of the user (employer, job title, city, relationship status, phone, a specific recurring preference) and the new memory reflects a change, correction, or explicit replacement. The old memory is no longer true.
 - "refines": the new memory says everything the old one said AND adds detail, so the old one is now a vaguer version of the same fact. "in love with someone" refined by "in love with someone named Meera". The old one is not wrong, just redundant.
-- "duplicate": same meaning as the new memory, adding no new information.
-- "coexists": about a different attribute, or both can be true at once.
+- "duplicate": the same situation restated. DIFFERENT WORDING IS NOT DIFFERENT INFORMATION. If a reader would learn nothing new from keeping both, it is a duplicate however differently it is phrased.
+- "coexists": a genuinely different attribute, or two things that are separately true and separately useful.
 
 Rules:
 - Only supersede when the old memory would now be WRONG to tell the user.
 - Different attributes always coexist (employer vs favourite food).
 - Two memories about the same attribute with the SAME value are duplicates, not supersessions.
 - Prefer "refines" over "coexists" when the new memory strictly contains the old one's information. Keeping both would show the user the same fact twice, once with less detail.
-- Be conservative otherwise: when unsure, choose "coexists".
+- Be conservative about SUPERSEDES specifically: when unsure whether something is now wrong, choose "coexists".
+  Do NOT be conservative about duplicates. Restating one situation many ways is
+  the most common way a memory store rots: retrieval returns five versions of
+  one fact and the user reads the same thing five times.
+
+Worked examples of the SAME situation restated — all duplicates or refinements, never "coexists":
+- "User will not tell the name of the person they love until they are committed"
+  vs "The user is in love with someone whose identity they have not disclosed and
+  will reveal it once both are committed" -> duplicate. Same situation, longer words.
+- "The user is in love with someone, but the relationship is not yet confirmed"
+  vs either of the above -> duplicate (it is the same fact with less detail; the
+  more detailed one should survive).
+- "User works at Google" vs "The user is employed by Google as an engineer"
+  -> refines: the second adds the role.
+
+Ask yourself: if both were shown to the user side by side, would they say "yes,
+two separate things" or "why are you telling me this twice?" If the latter, it
+is a duplicate.
 
 Return strict JSON:
 {
